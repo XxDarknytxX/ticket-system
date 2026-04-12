@@ -45,45 +45,73 @@ export function requireAdmin(req, res, next) {
  * Super admins always pass. For other roles, checks the granted flag in role_permissions.
  * Falls back to hardcoded defaults if no DB row exists.
  */
-export function requirePermission(pool, permission) {
-  const defaultPerms = {
-    agent: ["dashboard", "booking", "ticket_search"],
-    dock: ["scanner"],
-    admin: [
-      "dashboard", "booking", "ticket_search", "reports", "scanner",
-      "scan_history", "configuration", "users", "teams", "license_overview",
-    ],
-  };
+/**
+ * Default permissions — seeded into role_permissions on first check if no rows exist.
+ * Once seeded, the DB is the sole source of truth (no more hardcoded fallbacks).
+ */
+const DEFAULT_PERMS = {
+  agent: ["dashboard", "booking", "ticket_search"],
+  dock: ["scanner"],
+  admin: [
+    "dashboard", "booking", "ticket_search", "reports", "scanner",
+    "scan_history", "configuration", "users", "teams", "license_overview",
+  ],
+};
 
+const ALL_PERMISSIONS = [
+  "dashboard", "booking", "ticket_search", "reports", "scanner",
+  "scan_history", "configuration", "users", "teams", "license_overview",
+];
+
+// Track which roles have been seeded in this process lifetime
+const seededRoles = new Set();
+
+export function requirePermission(pool, permission) {
   return async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    // Super admin bypasses all permission checks
     if (req.user.role === "super_admin") return next();
+
+    const role = req.user.role;
 
     try {
       const permPool = req.instancePool || pool;
+
+      // If this role has never been checked, seed defaults if no DB rows exist
+      if (!seededRoles.has(`${permPool.pool?.config?.connectionConfig?.database || 'default'}_${role}`)) {
+        const [countRows] = await permPool.query(
+          "SELECT COUNT(*) AS c FROM role_permissions WHERE role_name = ?", [role]
+        );
+        if (countRows[0].c === 0) {
+          // No rows for this role — seed defaults
+          const granted = DEFAULT_PERMS[role] || [];
+          for (const perm of ALL_PERMISSIONS) {
+            try {
+              await permPool.query(
+                "INSERT IGNORE INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)",
+                [role, perm, granted.includes(perm) ? 1 : 0]
+              );
+            } catch {}
+          }
+        }
+        seededRoles.add(`${permPool.pool?.config?.connectionConfig?.database || 'default'}_${role}`);
+      }
+
+      // Always use DB — no hardcoded fallback
       const [rows] = await permPool.query(
         "SELECT granted FROM role_permissions WHERE role_name = ? AND permission = ?",
-        [req.user.role, permission]
+        [role, permission]
       );
       if (rows.length > 0) {
-        // Explicit DB entry for this permission — use it
         if (rows[0].granted) return next();
         return res.status(403).json({ error: `You do not have permission: ${permission}` });
       }
-      // No DB row for this specific permission — fall back to hardcoded defaults
-      // (the role may have other permissions in DB, but this one isn't configured there)
-      const defaults = defaultPerms[req.user.role] || [];
-      if (defaults.includes(permission)) return next();
+      // Permission not in DB at all — deny by default
       return res.status(403).json({ error: `You do not have permission: ${permission}` });
     } catch (err) {
       console.error("Permission check error:", err.message);
-      // On DB error, fall back to hardcoded defaults
-      const defaults = defaultPerms[req.user.role] || [];
-      if (defaults.includes(permission)) return next();
-      return res.status(403).json({ error: `You do not have permission: ${permission}` });
+      return res.status(403).json({ error: `Permission check failed` });
     }
   };
 }
