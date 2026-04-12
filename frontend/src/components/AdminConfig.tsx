@@ -57,22 +57,29 @@ function generateShades(hex: string): Record<string, string> {
   };
 }
 
+// Instance-scoped localStorage key prefix
+const _inst = (() => {
+  const p = window.location.pathname.split("/").filter(Boolean);
+  const routes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify"];
+  return (p.length > 0 && !routes.includes(p[0])) ? p[0] + "_" : "";
+})();
+
 function applyThemeColor(hex: string) {
   const shades = generateShades(hex);
   const root = document.documentElement;
   Object.entries(shades).forEach(([shade, color]) => {
     root.style.setProperty(`--color-violet-${shade}`, color);
   });
-  localStorage.setItem('theme_primary_color', hex);
+  localStorage.setItem(_inst + 'theme_primary_color', hex);
 }
 
 // Apply saved theme on module load
-const savedTheme = localStorage.getItem('theme_primary_color');
+const savedTheme = localStorage.getItem(_inst + 'theme_primary_color');
 if (savedTheme) applyThemeColor(savedTheme);
 
 /* ─── Color Picker Component ─── */
 function ColorPicker() {
-  const saved = localStorage.getItem('theme_primary_color') || "#7c3aed";
+  const saved = localStorage.getItem(_inst + 'theme_primary_color') || "#7c3aed";
   const [pickerColor, setPickerColor] = useState(saved);
   const savedHSL = hexToHSL(saved);
   const [hue, setHue] = useState(savedHSL[0]);

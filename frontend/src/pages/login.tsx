@@ -47,7 +47,11 @@ export default function Login() {
         const color = data?.settings?.primary_color;
         if (color) {
           applyThemeColor(color);
-          localStorage.setItem('theme_primary_color', color);
+          // Instance-scoped localStorage key
+          const p = window.location.pathname.split("/").filter(Boolean);
+          const routes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify"];
+          const inst = (p.length > 0 && !routes.includes(p[0])) ? p[0] + "_" : "";
+          localStorage.setItem(inst + 'theme_primary_color', color);
         }
       } catch { /* offline / server down — fall back to localStorage default */ }
     })();

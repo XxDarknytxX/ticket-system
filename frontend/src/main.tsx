@@ -3,9 +3,16 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
+// Instance-scoped localStorage key helper
+const _inst = (() => {
+  const p = window.location.pathname.split("/").filter(Boolean);
+  const routes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify"];
+  return (p.length > 0 && !routes.includes(p[0])) ? p[0] + "_" : "";
+})();
+
 // Apply saved theme color on startup
 ;(() => {
-  const hex = localStorage.getItem('theme_primary_color');
+  const hex = localStorage.getItem(_inst + 'theme_primary_color');
   if (!hex) return;
   const [h, s] = (() => {
     const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;

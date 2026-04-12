@@ -226,7 +226,8 @@ export default function AppShell() {
           const settingsData = await SettingsApi.getPublicSettings();
           const savedColor = settingsData.settings?.primary_color;
           if (savedColor && /^#[0-9a-fA-F]{6}$/.test(savedColor)) {
-            localStorage.setItem('theme_primary_color', savedColor);
+            const _themeInst = instanceFromPath ? instanceFromPath + '_' : '';
+            localStorage.setItem(_themeInst + 'theme_primary_color', savedColor);
             // Apply theme
             const r = parseInt(savedColor.slice(1,3),16)/255, g = parseInt(savedColor.slice(3,5),16)/255, b = parseInt(savedColor.slice(5,7),16)/255;
             const max = Math.max(r,g,b), min = Math.min(r,g,b);
