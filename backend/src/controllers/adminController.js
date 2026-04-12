@@ -50,6 +50,52 @@ async function checkLicenseLimit(pool, role) {
   return { limit, current: countRows[0].total, ok: countRows[0].total < limit };
 }
 
+/**
+ * Sync a super_admin's credentials across the shared super_admins table
+ * and all instance users tables. Call after any password/name change.
+ */
+async function syncSuperAdmin(sharedPool, email, updates) {
+  try {
+    // Update shared super_admins table
+    const setClauses = [];
+    const values = [];
+    if (updates.password_hash) { setClauses.push("password_hash = ?"); values.push(updates.password_hash); }
+    if (updates.first_name !== undefined) { setClauses.push("first_name = ?"); values.push(updates.first_name); }
+    if (updates.last_name !== undefined) { setClauses.push("last_name = ?"); values.push(updates.last_name); }
+    if (setClauses.length === 0) return;
+
+    values.push(email);
+    await sharedPool.query(`UPDATE super_admins SET ${setClauses.join(", ")} WHERE email = ?`, values);
+
+    // Sync to all instance users tables
+    const [instances] = await sharedPool.query("SELECT db_name FROM database_instances");
+    const mysql = (await import("mysql2/promise")).default;
+    const base = {
+      host: process.env.DATABASE_HOST || "localhost",
+      port: Number(process.env.DATABASE_PORT || 3306),
+      user: process.env.DATABASE_USER,
+      password: process.env.DATABASE_PASSWORD,
+      waitForConnections: true, connectionLimit: 2, queueLimit: 0
+    };
+
+    for (const inst of instances) {
+      try {
+        const instPool = mysql.createPool({ ...base, database: inst.db_name });
+        const setClausesInst = [];
+        const valuesInst = [];
+        if (updates.password_hash) { setClausesInst.push("password_hash = ?"); valuesInst.push(updates.password_hash); }
+        if (updates.first_name !== undefined) { setClausesInst.push("first_name = ?"); valuesInst.push(updates.first_name); }
+        if (updates.last_name !== undefined) { setClausesInst.push("last_name = ?"); valuesInst.push(updates.last_name); }
+        valuesInst.push(email);
+        await instPool.query(`UPDATE users SET ${setClausesInst.join(", ")} WHERE email = ? AND role = 'super_admin'`, valuesInst);
+        await instPool.end();
+      } catch {} // skip if instance DB is unreachable
+    }
+  } catch (e) {
+    console.error("syncSuperAdmin error:", e.message);
+  }
+}
+
 /** Factory */
 export function makeAdminController(pool) {
   if (!process.env.JWT_SECRET) {
@@ -311,6 +357,19 @@ export function makeAdminController(pool) {
         }
 
         const updatedUser = await findUserById(db(req), id);
+
+        // If updating a super_admin, sync password/name across all instances
+        if (updatedUser && updatedUser.role === "super_admin") {
+          const syncUpdates = {};
+          if (password && password.trim()) syncUpdates.password_hash = await bcrypt.hash(password, 10);
+          if (first_name !== undefined) syncUpdates.first_name = first_name;
+          if (last_name !== undefined) syncUpdates.last_name = last_name;
+          if (Object.keys(syncUpdates).length > 0) {
+            const sharedDb = req.sharedPool || pool;
+            await syncSuperAdmin(sharedDb, updatedUser.email, syncUpdates);
+          }
+        }
+
         await logAudit(db(req), req, { action: "user.update", targetType: "user", targetId: id, details: { fields: updateFields.map(f => f.split(" = ")[0]) } });
         return send.ok(res, { user: updatedUser });
       } catch (e) {
@@ -782,6 +841,14 @@ export function makeAdminController(pool) {
         const userId = await validateResetToken(pool, token);
         const hash = await bcrypt.hash(password, 10);
         await db(req).query("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
+
+        // If the user is a super_admin, sync password across all instances
+        const user = await findUserById(db(req), userId);
+        if (user && user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          await syncSuperAdmin(sharedDb, user.email, { password_hash: hash });
+        }
+
         return send.ok(res, { message: "Password updated successfully" });
       } catch (e) {
         return send.bad(res, e.message);
