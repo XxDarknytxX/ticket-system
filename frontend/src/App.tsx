@@ -31,6 +31,21 @@ function getRole() {
   } catch { return null; }
 }
 
+/** Detect instance prefix from URL: /test/dashboard → "/test", /dashboard → "" */
+function getInstanceBasename(): string {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const frontendRoutes = [
+    "dashboard", "booking", "tickets", "reports", "scanner", "scan-history",
+    "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify",
+  ];
+  if (parts.length > 0 && !frontendRoutes.includes(parts[0])) {
+    return `/${parts[0]}`;
+  }
+  return "";
+}
+
+const INSTANCE_BASENAME = getInstanceBasename();
+
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/login" replace />;
@@ -77,7 +92,7 @@ function RoleRedirect() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={INSTANCE_BASENAME}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -2,20 +2,23 @@
 // Detect instance from URL path: /test/dashboard → instance = "test" → API at /test/api
 // / or /dashboard → production → API at /api
 function getApiBaseUrl() {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (envUrl && envUrl !== "/api") return envUrl; // explicit override
-
   if (typeof window !== "undefined") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     // Known frontend routes that are NOT instance names
     const frontendRoutes = ["dashboard", "booking", "tickets", "reports", "scanner", "scan-history",
       "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify"];
     if (pathParts.length > 0 && !frontendRoutes.includes(pathParts[0])) {
-      // First path segment is an instance name
-      return `/${pathParts[0]}/api`;
+      // First path segment is an instance name — prefix the API URL
+      const instancePrefix = `/${pathParts[0]}`;
+      const envUrl = (import.meta as any).env?.VITE_API_URL;
+      if (envUrl) {
+        // e.g. "http://localhost:5000/api" → "http://localhost:5000/test/api"
+        return envUrl.replace(/\/api$/, `${instancePrefix}/api`);
+      }
+      return `${instancePrefix}/api`;
     }
   }
-  return "/api";
+  return (import.meta as any).env?.VITE_API_URL || "/api";
 }
 
 const API_BASE_URL = getApiBaseUrl();
@@ -186,8 +189,9 @@ export const License = {
   deactivateUser: (id) => api.put(`/users/${id}/deactivate`),
 };
 
-// Instances always use /api (shared, not instance-scoped)
-const instanceApi = new ApiClient("/api");
+// Instances always use the base /api (shared, not instance-scoped)
+const baseApiUrl = (import.meta as any).env?.VITE_API_URL || "/api";
+const instanceApi = new ApiClient(baseApiUrl);
 export const Instances = {
   getAll: () => instanceApi.get("/instances"),
   create: (data) => instanceApi.post("/instances", data),
