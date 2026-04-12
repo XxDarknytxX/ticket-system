@@ -2,6 +2,17 @@
 import bcrypt from "bcryptjs";
 import { logAudit } from "../utils/audit.js";
 
+/** Default role permissions seeded into every new instance */
+const ALL_PERMISSIONS = [
+  "dashboard", "booking", "ticket_search", "reports", "scanner",
+  "scan_history", "configuration", "users", "teams", "license_overview",
+];
+const DEFAULT_ROLE_PERMS = {
+  admin: ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"],
+  agent: ["dashboard", "booking", "ticket_search"],
+  dock: ["scanner"],
+};
+
 const send = {
   ok: (res, data = {}) => res.json(data),
   created: (res, data = {}) => res.status(201).json(data),
@@ -66,6 +77,18 @@ export function makeInstanceController(poolManager) {
               [sa.email, sa.first_name || null, sa.last_name || null, sa.password_hash]
             );
           } catch {} // ignore if already exists
+        }
+
+        // Seed default permissions for built-in roles
+        for (const [role, granted] of Object.entries(DEFAULT_ROLE_PERMS)) {
+          for (const perm of ALL_PERMISSIONS) {
+            try {
+              await instancePool.query(
+                "INSERT IGNORE INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)",
+                [role, perm, granted.includes(perm) ? 1 : 0]
+              );
+            } catch {}
+          }
         }
 
         // Register in the shared database

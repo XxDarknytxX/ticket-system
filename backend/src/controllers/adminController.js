@@ -573,14 +573,39 @@ export function makeAdminController(pool) {
 
     getPermissions: async (req, res) => {
       try {
+        const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"];
+        const defaultPerms = {
+          admin: ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"],
+          agent: ["dashboard", "booking", "ticket_search"],
+          dock: ["scanner"],
+        };
+        const builtIn = ["super_admin", "admin", "agent", "dock"];
+
+        // Seed defaults for any built-in role that has no rows yet
+        for (const role of builtIn) {
+          if (role === "super_admin") continue; // super_admin bypasses permissions
+          const [countRows] = await db(req).query(
+            "SELECT COUNT(*) AS c FROM role_permissions WHERE role_name = ?", [role]
+          );
+          if (countRows[0].c === 0) {
+            const granted = defaultPerms[role] || [];
+            for (const perm of allPerms) {
+              try {
+                await db(req).query(
+                  "INSERT IGNORE INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)",
+                  [role, perm, granted.includes(perm) ? 1 : 0]
+                );
+              } catch {}
+            }
+          }
+        }
+
         const [rows] = await db(req).query("SELECT * FROM role_permissions ORDER BY role_name, permission");
         const byRole = {};
         rows.forEach(r => {
           if (!byRole[r.role_name]) byRole[r.role_name] = {};
           byRole[r.role_name][r.permission] = !!r.granted;
         });
-        // Also include built-in roles that might not have permissions yet
-        const builtIn = ["super_admin", "admin", "agent", "dock"];
         builtIn.forEach(r => { if (!byRole[r]) byRole[r] = {}; });
         return send.ok(res, { permissions: byRole, raw: rows });
       } catch (e) {
