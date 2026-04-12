@@ -54,20 +54,18 @@ type NavItem = (typeof allNavItems)[keyof typeof allNavItems];
 function getNavSections(role: string, permissions: Record<string, boolean>) {
   const has = (perm: string) => {
     if (role === "super_admin") return true;
+    // DB is the sole source of truth — no hardcoded fallbacks
     if (permissions && Object.keys(permissions).length > 0) return !!permissions[perm];
-    if (role === "dock") return perm === "scanner";
-    if (role === "agent") return ["dashboard", "booking", "ticket_search"].includes(perm);
-    if (role === "admin") return perm !== "license_management";
-    return perm === "dashboard";
+    // No permissions loaded yet — show nothing (loading state)
+    return false;
   };
 
   const isSuperAdmin = role === "super_admin";
-  const isAdminOnly = role === "admin";
   const main = [allNavItems.dashboard, allNavItems.booking].filter(i => has(i.perm));
   const ops = [allNavItems.tickets, allNavItems.reports, allNavItems.scanner].filter(i => has(i.perm));
   const adminItems = [allNavItems.configuration, allNavItems.users, allNavItems.teams, allNavItems.scanHistory].filter(i => has(i.perm));
-  // Admin gets a read-only summary "License Overview"
-  if (isAdminOnly) adminItems.push(allNavItems.licenseOverview);
+  // License overview shown if the user has that permission
+  if (has("license_overview")) adminItems.push(allNavItems.licenseOverview);
   // Super admin gets full "License Management" + audit logs in their own section
   const superAdmin = isSuperAdmin ? [allNavItems.licenseManagement, allNavItems.auditLogs] : [];
 

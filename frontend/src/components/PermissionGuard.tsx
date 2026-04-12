@@ -3,16 +3,6 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { Permissions } from "../services/api";
 import { ShieldX } from "lucide-react";
 
-const defaultPerms: Record<string, string[]> = {
-  super_admin: [], // bypass — always allowed
-  admin: [
-    "dashboard", "booking", "ticket_search", "reports", "scanner",
-    "scan_history", "configuration", "users", "teams", "license_overview",
-  ],
-  agent: ["dashboard", "booking", "ticket_search"],
-  dock: ["scanner"],
-};
-
 // Ordered list: permission → route path. First match = landing page.
 const permRouteOrder: { perm: string; path: string }[] = [
   { perm: "dashboard", path: "/dashboard" },
@@ -47,16 +37,13 @@ export function getFirstPermittedRoute(
 ): string {
   if (role === "super_admin") return "/dashboard";
 
-  for (const { perm, path } of permRouteOrder) {
-    const hasDbPerms = permissions && Object.keys(permissions).length > 0;
-    if (hasDbPerms && perm in permissions) {
+  if (permissions && Object.keys(permissions).length > 0) {
+    for (const { perm, path } of permRouteOrder) {
       if (permissions[perm]) return path;
-    } else {
-      const defaults = defaultPerms[role || ""] || [];
-      if (defaults.includes(perm)) return path;
     }
   }
-  return "/login"; // No permission at all — send to login
+
+  return "/login";
 }
 
 export default function PermissionGuard({ permission, children }: { permission: string; children: ReactNode }) {
@@ -74,32 +61,22 @@ export default function PermissionGuard({ permission, children }: { permission: 
       .then((data) => {
         if (cancelled) return;
         const perms = data.permissions || {};
-        const hasDbPerms = Object.keys(perms).length > 0;
 
-        // If DB has this specific permission defined, use it.
-        // Otherwise fall back to hardcoded defaults (handles permissions like
-        // license_overview that aren't in the toggleable config page).
-        const allowed = hasDbPerms && permission in perms
-          ? !!perms[permission]
-          : (defaultPerms[role || ""] || []).includes(permission);
+        // DB is the sole source of truth — no hardcoded fallbacks
+        const allowed = !!perms[permission];
 
         if (allowed) {
           setStatus("allowed");
         } else {
-          // Find the first page they CAN access
-          setRedirectTo(getFirstPermittedRoute(role, hasDbPerms ? perms : null));
+          setRedirectTo(getFirstPermittedRoute(role, perms));
           setStatus("denied");
         }
       })
       .catch(() => {
         if (cancelled) return;
-        const defaults = defaultPerms[role || ""] || [];
-        if (defaults.includes(permission)) {
-          setStatus("allowed");
-        } else {
-          setRedirectTo(getFirstPermittedRoute(role, null));
-          setStatus("denied");
-        }
+        // API failed — deny access
+        setRedirectTo("/login");
+        setStatus("denied");
       });
 
     return () => { cancelled = true; };
@@ -116,11 +93,9 @@ export default function PermissionGuard({ permission, children }: { permission: 
   }
 
   if (status === "denied") {
-    // If we found a permitted page, redirect there silently
     if (redirectTo) {
       return <Navigate to={redirectTo} replace />;
     }
-    // No permitted page at all — show access denied
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-56px)]">
         <div className="flex flex-col items-center gap-3 text-center px-6">
