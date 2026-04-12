@@ -55,7 +55,7 @@ function bookingSelect() {
     b.payment_method,
     pm.name AS payment_method_name,
     DATE_ADD(b.travel_date, INTERVAL COALESCE(b.custom_validity_days,
-      (SELECT setting_value FROM \`${sharedDb}\`.system_settings WHERE setting_key = 'ticket_validity_days')
+      (SELECT setting_value FROM system_settings WHERE setting_key = 'ticket_validity_days')
     ) DAY) AS valid_until,
     c.name  AS customer_name,
     c.email AS customer_email,
@@ -80,9 +80,9 @@ function bookingSelect() {
   JOIN routes r        ON b.route_id = r.id
   JOIN service_types st ON r.service_type_id = st.id
   LEFT JOIN vessels v   ON b.vessel_id = v.id
-  JOIN \`${sharedDb}\`.users u         ON b.booked_by = u.id
-  LEFT JOIN \`${sharedDb}\`.teams tm   ON u.team_id = tm.id
-  LEFT JOIN \`${sharedDb}\`.users bu   ON b.boarded_by = bu.id
+  JOIN users u         ON b.booked_by = u.id
+  LEFT JOIN teams tm   ON u.team_id = tm.id
+  LEFT JOIN users bu   ON b.boarded_by = bu.id
   LEFT JOIN payment_methods pm ON pm.code = b.payment_method
 `;
 }

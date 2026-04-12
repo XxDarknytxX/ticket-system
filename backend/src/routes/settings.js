@@ -7,11 +7,9 @@ export function makeSettingsRouter(controller, pool) {
   // Public: theme color + app name only (no auth) — used by login page
   router.get("/settings/public", controller.getPublicSettings);
 
-  router.use(requireAuth);
-
-  // Only admin/super_admin can read all settings
-  router.get("/settings", requirePermission(pool, "configuration"), controller.getSettings);
-  router.put("/settings/:key", requireAdmin, controller.updateSetting);
+  // Protected routes — per-route auth (NOT router.use) to avoid blocking other routes
+  router.get("/settings", requireAuth, requirePermission(pool, "configuration"), controller.getSettings);
+  router.put("/settings/:key", requireAuth, requireAdmin, controller.updateSetting);
 
   return router;
 }

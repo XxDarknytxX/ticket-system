@@ -199,6 +199,11 @@ export default function AppShell() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+  const profileRef = useRef<HTMLButtonElement>(null);
+  const profileRef2 = useRef<HTMLButtonElement>(null);
+  const profileRefMobile = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Detect instance from URL path — /test/dashboard → "test", /dashboard → null (production)
   const instanceFromPath = (() => {
@@ -208,11 +213,6 @@ export default function AppShell() {
     if (parts.length > 0 && !frontendRoutes.includes(parts[0])) return parts[0];
     return null;
   })();
-  const profileRef = useRef<HTMLButtonElement>(null);
-  const profileRef2 = useRef<HTMLButtonElement>(null);
-  const profileRefMobile = useRef<HTMLButtonElement>(null);
-  const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     async function load() {

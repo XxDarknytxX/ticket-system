@@ -101,14 +101,11 @@ function mountInstanceRoutes(prefix) {
   // Instance middleware resolves req.instancePool from :instance param
   router.use(attachInstance);
 
-  // Public settings (no auth, uses instance pool for settings like primary_color)
-  router.get("/settings/public", (req, res) => settingsController.getPublicSettings(req, res));
+  // Settings (public endpoint first, then auth-protected)
+  router.use(makeSettingsRouter(settingsController, sharedPool));
 
   // Auth routes — login checks super_admins first, then instance users
   router.use(makeAuthRouter(adminController, sharedPool));
-
-  // All other routes
-  router.use(makeSettingsRouter(settingsController, sharedPool));
   router.use(makeServiceRouter(serviceController));
   router.use(makeBookingRouter(bookingController, sharedPool));
   router.use(makeScanRouter(scanController, sharedPool));
