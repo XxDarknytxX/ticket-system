@@ -42,7 +42,7 @@ async function generateTicketId(instancePool, teamId, terminalId) {
 }
 
 /** Common SELECT for booking queries — uses a function so we can qualify shared tables */
-function bookingSelect(sharedDb) {
+function bookingSelect() {
   return `
   SELECT
     b.*,
@@ -93,13 +93,12 @@ export function makeBookingController(pool) {
   // For queries that only touch instance tables, use db(req).
   // For queries that JOIN instance + shared tables, use db(req) with qualified shared table names.
   const db = (req) => req.instancePool || pool;
-  const sharedDbName = process.env.DATABASE_NAME || "booking_app";
 
   return {
     // GET /api/bookings
     getBookings: async (req, res) => {
       try {
-        const [rows] = await db(req).query(`${bookingSelect(sharedDbName)} ORDER BY b.created_at DESC`);
+        const [rows] = await db(req).query(`${bookingSelect()} ORDER BY b.created_at DESC`);
         return send.ok(res, { bookings: rows });
       } catch (e) {
         console.error(e);
@@ -150,8 +149,8 @@ export function makeBookingController(pool) {
           JOIN routes r         ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v   ON b.vessel_id = v.id
-          JOIN \`${sharedDbName}\`.users u          ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.users bu    ON b.boarded_by = bu.id
+          JOIN users u          ON b.booked_by = u.id
+          LEFT JOIN users bu    ON b.boarded_by = bu.id
           LEFT JOIN payment_methods pm ON pm.code = b.payment_method
           WHERE b.ticket_id = ?`,
           [ticketId]
@@ -303,7 +302,7 @@ export function makeBookingController(pool) {
         `);
 
         const [recentBookings] = await db(req).query(`
-          ${bookingSelect(sharedDbName)}
+          ${bookingSelect()}
           ORDER BY b.created_at DESC LIMIT 5
         `);
 
@@ -428,8 +427,8 @@ export function makeBookingController(pool) {
           JOIN routes r ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
+          JOIN users u ON b.booked_by = u.id
+          LEFT JOIN users bu ON b.boarded_by = bu.id
           LEFT JOIN payment_methods pm ON pm.code = b.payment_method
           ${where}
           ORDER BY b.created_at DESC
@@ -578,7 +577,7 @@ export function makeBookingController(pool) {
         }
 
         // Always read fresh terminal_id and team_code from DB (not stale JWT)
-        const [userRow] = await pool.query(
+        const [userRow] = await db(req).query(
           "SELECT u.terminal_id, t.team_code FROM users u LEFT JOIN teams t ON u.team_id = t.id WHERE u.id = ?",
           [req.user.id]
         );
@@ -633,11 +632,11 @@ export function makeBookingController(pool) {
         await db(req).query("COMMIT");
 
         const [newBooking] = await db(req).query(
-          `${bookingSelect(sharedDbName)} WHERE b.id = ?`,
+          `${bookingSelect()} WHERE b.id = ?`,
           [bookingResult.insertId]
         );
 
-        await logAudit(pool, req, {
+        await logAudit(db(req), req, {
           action: "booking.create",
           targetType: "booking",
           targetId: ticketId,
@@ -694,7 +693,7 @@ export function makeBookingController(pool) {
         }
 
         const [updated] = await db(req).query(
-          `${bookingSelect(sharedDbName)} WHERE b.ticket_id = ?`,
+          `${bookingSelect()} WHERE b.ticket_id = ?`,
           [ticketId]
         );
 
@@ -706,7 +705,7 @@ export function makeBookingController(pool) {
           completed: "booking.complete",
           confirmed: "booking.reconfirm",
         };
-        await logAudit(pool, req, {
+        await logAudit(db(req), req, {
           action: actionMap[status] || "booking.status_change",
           targetType: "booking",
           targetId: ticketId,
@@ -757,8 +756,8 @@ export function makeBookingController(pool) {
           SELECT t.id as team_id, t.name as team_name, t.color, t.team_code,
             COUNT(b.id) as bookings, COALESCE(SUM(b.total_price),0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.teams t ON u.team_id = t.id
+          JOIN users u ON b.booked_by = u.id
+          LEFT JOIN teams t ON u.team_id = t.id
           WHERE 1=1 ${dateFilter} ${paymentFilter} ${agentFilter}
           GROUP BY t.id ORDER BY revenue DESC
         `);
@@ -767,7 +766,7 @@ export function makeBookingController(pool) {
           SELECT u.terminal_id, CONCAT(u.first_name,' ',COALESCE(u.last_name,'')) as agent_name,
             COUNT(b.id) as bookings, COALESCE(SUM(b.total_price),0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          JOIN users u ON b.booked_by = u.id
           WHERE 1=1 ${dateFilter} ${teamFilter} ${paymentFilter} ${agentFilter}
           GROUP BY u.terminal_id, u.id ORDER BY revenue DESC
         `);
@@ -775,7 +774,7 @@ export function makeBookingController(pool) {
         const [totals] = await db(req).query(`
           SELECT COUNT(b.id) as total_bookings, COALESCE(SUM(b.total_price),0) as total_revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          JOIN users u ON b.booked_by = u.id
           WHERE 1=1 ${dateFilter} ${teamFilter} ${paymentFilter} ${agentFilter}
         `);
 
@@ -785,8 +784,8 @@ export function makeBookingController(pool) {
             t.id as team_id, t.name as team_name, t.color as team_color,
             COUNT(b.id) as bookings, COALESCE(SUM(b.total_price),0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.teams t ON u.team_id = t.id
+          JOIN users u ON b.booked_by = u.id
+          LEFT JOIN teams t ON u.team_id = t.id
           WHERE 1=1 ${dateFilter} ${teamFilter} ${paymentFilter}
           GROUP BY u.id ORDER BY revenue DESC
         `);
@@ -797,7 +796,7 @@ export function makeBookingController(pool) {
         const [dailyRevenue] = await db(req).query(`
           SELECT DATE(b.created_at) as date, COUNT(b.id) as bookings, COALESCE(SUM(b.total_price),0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          JOIN users u ON b.booked_by = u.id
           WHERE 1=1 ${chartFilter} ${teamFilter} ${paymentFilter} ${agentFilter}
           GROUP BY DATE(b.created_at) ORDER BY date ASC
         `);
@@ -806,7 +805,7 @@ export function makeBookingController(pool) {
         const [statusBreakdown] = await db(req).query(`
           SELECT b.status, COUNT(b.id) as count, COALESCE(SUM(b.total_price),0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          JOIN users u ON b.booked_by = u.id
           WHERE 1=1 ${dateFilter} ${teamFilter} ${paymentFilter} ${agentFilter}
           GROUP BY b.status
         `);
@@ -819,7 +818,7 @@ export function makeBookingController(pool) {
             COUNT(b.id) as count,
             COALESCE(SUM(b.total_price), 0) as revenue
           FROM bookings b
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          JOIN users u ON b.booked_by = u.id
           LEFT JOIN payment_methods pm ON pm.code = b.payment_method
           WHERE 1=1 ${dateFilter} ${teamFilter} ${agentFilter}
           GROUP BY COALESCE(b.payment_method, 'unspecified'), COALESCE(pm.name, 'Unspecified')
@@ -842,7 +841,7 @@ export function makeBookingController(pool) {
             SUM(CASE WHEN ts.scan_result = 'valid' THEN 1 ELSE 0 END) as valid_scans,
             MAX(ts.scanned_at) as last_scan
           FROM ticket_scans ts
-          JOIN \`${sharedDbName}\`.users u ON ts.scanned_by = u.id
+          JOIN users u ON ts.scanned_by = u.id
           GROUP BY u.id ORDER BY total_scans DESC
         `);
 
@@ -856,7 +855,7 @@ export function makeBookingController(pool) {
             SUM(CASE WHEN status = 'boarded' THEN 1 ELSE 0 END) as boarded,
             SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as pending,
             SUM(CASE WHEN status = 'invalidated' THEN 1 ELSE 0 END) as invalidated,
-            SUM(CASE WHEN status = 'confirmed' AND DATE_ADD(travel_date, INTERVAL COALESCE(custom_validity_days, (SELECT setting_value FROM \`${sharedDbName}\`.system_settings WHERE setting_key = 'ticket_validity_days')) DAY) < NOW() THEN 1 ELSE 0 END) as expired,
+            SUM(CASE WHEN status = 'confirmed' AND DATE_ADD(travel_date, INTERVAL COALESCE(custom_validity_days, (SELECT setting_value FROM system_settings WHERE setting_key = 'ticket_validity_days')) DAY) < NOW() THEN 1 ELSE 0 END) as expired,
             COUNT(*) as total
           FROM bookings
         `);
@@ -886,7 +885,7 @@ export function makeBookingController(pool) {
         for (const ticketId of ticket_ids) {
           try {
             const [rows] = await db(req).query(
-              `${bookingSelect(sharedDbName)} WHERE b.ticket_id = ?`,
+              `${bookingSelect()} WHERE b.ticket_id = ?`,
               [ticketId]
             );
             if (rows.length === 0) { failed++; continue; }
@@ -907,7 +906,7 @@ export function makeBookingController(pool) {
           }
         }
 
-        await logAudit(pool, req, {
+        await logAudit(db(req), req, {
           action: "booking.email_tickets",
           targetType: "booking",
           targetId: ticket_ids.join(","),

@@ -10,7 +10,6 @@ const send = {
 
 export function makeScanController(pool) {
   const db = (req) => req.instancePool || pool;
-  const sharedDbName = process.env.DATABASE_NAME || "booking_app";
 
   return {
     // GET /api/tickets/:ticketId/verify
@@ -26,7 +25,7 @@ export function makeScanController(pool) {
             b.boarded_at,
             b.custom_validity_days,
             DATE_ADD(b.travel_date, INTERVAL COALESCE(b.custom_validity_days,
-              (SELECT setting_value FROM \`${sharedDbName}\`.system_settings WHERE setting_key = 'ticket_validity_days')
+              (SELECT setting_value FROM system_settings WHERE setting_key = 'ticket_validity_days')
             ) DAY) AS valid_until,
             c.name AS customer_name,
             c.email AS customer_email,
@@ -48,8 +47,8 @@ export function makeScanController(pool) {
           JOIN routes r ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
+          JOIN users u ON b.booked_by = u.id
+          LEFT JOIN users bu ON b.boarded_by = bu.id
           WHERE b.ticket_id = ?`,
           [ticketId]
         );
@@ -112,7 +111,7 @@ export function makeScanController(pool) {
           `INSERT INTO ticket_scans (booking_id, scanned_by, scan_result) VALUES (?, ?, ?)`,
           [booking.id, req.user.id, scanResult]
         );
-        await logAudit(pool, req, {
+        await logAudit(db(req), req, {
           action: `ticket.scan.${scanResult}`,
           targetType: "booking",
           targetId: ticketId,
@@ -126,7 +125,7 @@ export function makeScanController(pool) {
                     bu.email AS boarded_by_email
              FROM bookings b
              JOIN customers c ON b.customer_id = c.id
-             LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
+             LEFT JOIN users bu ON b.boarded_by = bu.id
              WHERE b.ticket_id = ?`,
             [ticketId]
           );
@@ -172,8 +171,8 @@ export function makeScanController(pool) {
           JOIN routes r ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
-          LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
+          JOIN users u ON b.booked_by = u.id
+          LEFT JOIN users bu ON b.boarded_by = bu.id
           WHERE b.ticket_id = ?`,
           [ticketId]
         );
@@ -204,7 +203,7 @@ export function makeScanController(pool) {
           JOIN bookings b ON ts.booking_id = b.id
           JOIN customers c ON b.customer_id = c.id
           JOIN routes r ON b.route_id = r.id
-          JOIN \`${sharedDbName}\`.users u ON ts.scanned_by = u.id
+          JOIN users u ON ts.scanned_by = u.id
           ORDER BY ts.scanned_at DESC
           LIMIT 500`
         );

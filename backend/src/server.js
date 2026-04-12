@@ -25,30 +25,18 @@ const app = express();
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-
     const allowedOrigins = [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:5173",
+      "http://localhost:3000", "http://localhost:3001", "http://localhost:5173",
       process.env.CORS_ORIGIN,
-      /^https:\/\/.*\.devtunnels\.ms$/,
-      /^https:\/\/.*\.app\.github\.dev$/,
-      /^https:\/\/.*\.githubpreview\.dev$/,
-      /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*\.devtunnels\.ms$/, /^https:\/\/.*\.app\.github\.dev$/,
+      /^https:\/\/.*\.githubpreview\.dev$/, /^https:\/\/.*\.vercel\.app$/,
       /^https:\/\/.*\.netlify\.app$/,
     ].filter(Boolean);
-
-    const isAllowed = allowedOrigins.some((allowed) => {
-      if (typeof allowed === "string") return origin === allowed;
-      if (allowed instanceof RegExp) return allowed.test(origin);
-      return false;
-    });
-
+    const isAllowed = allowedOrigins.some((a) =>
+      typeof a === "string" ? origin === a : a instanceof RegExp ? a.test(origin) : false
+    );
     if (isAllowed) callback(null, true);
-    else {
-      console.log("Blocked origin:", origin);
-      callback(new Error("Not allowed by CORS"));
-    }
+    else { console.log("Blocked origin:", origin); callback(new Error("Not allowed by CORS")); }
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -67,119 +55,93 @@ if (process.env.NODE_ENV === "development") {
   });
 }
 
-let pool; // shared pool (users, settings, teams, audit_logs)
-
+// ── Initialize shared pool ──
+let sharedPool;
 try {
-  pool = await poolManager.getSharedPool();
+  sharedPool = await poolManager.getSharedPool();
   console.log("Shared database connection established");
 
-  // Ensure shared-DB tables exist (users, teams, etc. are created by schema.sql,
-  // but role_permissions + system_settings may need runtime creation)
+  // Ensure production instance DB has all tables
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS role_permissions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        role_name VARCHAR(50) NOT NULL,
-        permission VARCHAR(100) NOT NULL,
-        granted BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_role_perm (role_name, permission),
-        INDEX idx_role_permissions_role (role_name)
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS system_settings (
-        setting_key VARCHAR(100) PRIMARY KEY,
-        setting_value TEXT NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-    await pool.query(
-      `INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('ticket_validity_days', '7')`
-    );
+    await poolManager.getInstancePool("production");
+    console.log("Production instance pool ready");
   } catch (e) {
-    console.error("Shared table migration error:", e.message);
+    console.error("Production instance init error:", e.message);
   }
-
-  // Ensure the active instance DB has its tables (runs instance schema)
-  try {
-    const activePool = await poolManager.getActiveInstancePool();
-    console.log(`Active instance pool ready: ${await poolManager.getActiveInstanceName()}`);
-  } catch (e) {
-    console.error("Instance pool init error:", e.message);
-  }
-
-  console.log("Database initialization complete");
 } catch (error) {
   console.error("Failed to initialize database:", error);
   process.exit(1);
 }
 
-// Controllers that use the SHARED pool (users, settings, auth, license, audit)
-const adminController = makeAdminController(pool);
-const settingsController = makeSettingsController(pool);
+// ── Controllers ──
+// Controllers are created without a fixed pool — they use req.instancePool at request time.
+// We pass sharedPool as default for backward compat; handlers override with req.instancePool.
+const adminController = makeAdminController(sharedPool);
+const serviceController = makeServiceController(sharedPool);
+const bookingController = makeBookingController(sharedPool);
+const scanController = makeScanController(sharedPool);
+const settingsController = makeSettingsController(sharedPool);
+const ticketLayoutController = makeTicketLayoutController(sharedPool);
+const paymentMethodController = makePaymentMethodController(sharedPool);
 const instanceController = makeInstanceController(poolManager);
 
-// Controllers that use INSTANCE data are created with the shared pool,
-// but will read from req.instancePool at request time (set by middleware).
-// We pass the shared pool so they can still JOIN to users/teams when needed.
-const serviceController = makeServiceController(pool);
-const bookingController = makeBookingController(pool);
-const scanController = makeScanController(pool);
-const ticketLayoutController = makeTicketLayoutController(pool);
-const paymentMethodController = makePaymentMethodController(pool);
-
-// Instance middleware — attaches req.instancePool on every authed request
 const attachInstance = instanceMiddleware(poolManager);
 
-// Routes: auth + settings mount BEFORE instance middleware (no instance needed for login)
-app.use("/api", makeAuthRouter(adminController, pool));
-app.use("/api", makeSettingsRouter(settingsController, pool));
-
-// Instance management routes (super_admin only, uses shared pool directly)
+// ── Instance management routes (super_admin, no instance needed) ──
+// These use the shared pool directly, mounted at /api/instances
 app.use("/api", makeInstanceRouter(instanceController));
 
-// All other routes get instance middleware so req.instancePool is available
-app.use("/api", attachInstance, makeServiceRouter(serviceController));
-app.use("/api", attachInstance, makeBookingRouter(bookingController, pool));
-app.use("/api", attachInstance, makeScanRouter(scanController, pool));
-app.use("/api", attachInstance, makeLayoutRouter(ticketLayoutController));
-app.use("/api", attachInstance, makePaymentMethodRouter(paymentMethodController));
+// ── Helper: build instance-scoped router ──
+// All other routes are mounted twice:
+//   /api/...              → production instance (default)
+//   /:instance/api/...    → named instance
+function mountInstanceRoutes(prefix) {
+  const router = express.Router({ mergeParams: true });
 
+  // Instance middleware resolves req.instancePool from :instance param
+  router.use(attachInstance);
+
+  // Public settings (no auth, uses instance pool for settings like primary_color)
+  router.get("/settings/public", (req, res) => settingsController.getPublicSettings(req, res));
+
+  // Auth routes — login checks super_admins first, then instance users
+  router.use(makeAuthRouter(adminController, sharedPool));
+
+  // All other routes
+  router.use(makeSettingsRouter(settingsController, sharedPool));
+  router.use(makeServiceRouter(serviceController));
+  router.use(makeBookingRouter(bookingController, sharedPool));
+  router.use(makeScanRouter(scanController, sharedPool));
+  router.use(makeLayoutRouter(ticketLayoutController));
+  router.use(makePaymentMethodRouter(paymentMethodController));
+
+  app.use(prefix, router);
+}
+
+// Mount: /api/* for production, /:instance/api/* for named instances
+mountInstanceRoutes("/api");
+mountInstanceRoutes("/:instance/api");
+
+// ── Health + Info ──
 app.get("/health", (_req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development",
-    version: "2.0.0",
-  });
+  res.json({ status: "ok", timestamp: new Date().toISOString(), version: "2.0.0" });
 });
 
 app.get("/", (_req, res) => {
   res.json({
     name: "Goundar Shipping API",
     version: "2.0.0",
-    endpoints: {
-      health: "/health",
-      auth: "/api/login, /api/register, /api/me",
-      users: "/api/users (admin only)",
-      services: "/api/service-types, /api/routes, /api/vessels",
-      bookings: "/api/bookings, /api/bookings/reports",
-      scanning: "/api/tickets/:id/verify, /api/tickets/:id/board",
-      instances: "/api/instances (super_admin only)",
-    },
+    instances: "GET /api/instances",
+    production: "/api/...",
+    otherInstances: "/{instance}/api/...",
   });
 });
 
+// ── Error handling ──
 app.use((error, _req, res, _next) => {
   console.error("Server error:", error);
-  if (error.name === "ValidationError") {
-    return res.status(400).json({ error: "Validation failed", details: error.message });
-  }
-  if (error.code === "LIMIT_FILE_SIZE") {
-    return res.status(413).json({ error: "File too large" });
-  }
+  if (error.name === "ValidationError") return res.status(400).json({ error: "Validation failed" });
+  if (error.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "File too large" });
   res.status(500).json({
     error: "Internal server error",
     message: process.env.NODE_ENV === "development" ? error.message : "Something went wrong",
@@ -187,11 +149,7 @@ app.use((error, _req, res, _next) => {
 });
 
 app.use("*", (req, res) => {
-  res.status(404).json({
-    error: "Route not found",
-    path: req.originalUrl,
-    method: req.method,
-  });
+  res.status(404).json({ error: "Route not found", path: req.originalUrl });
 });
 
 const port = process.env.PORT || 5000;
@@ -199,5 +157,4 @@ app.listen(port, () => {
   console.log(`\u{1F6A2} Goundar Shipping API v2.0 listening on http://localhost:${port}`);
   console.log(`\u{1F4E6} Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`\u{1F310} CORS Origin: ${process.env.CORS_ORIGIN || "http://localhost:3000"}`);
-  console.log(`\u{1F3E5} Health check: http://localhost:${port}/health`);
 });

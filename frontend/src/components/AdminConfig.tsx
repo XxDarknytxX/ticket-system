@@ -223,10 +223,8 @@ export default function AdminConfig() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   // Database instances (super_admin only)
   const [instances, setInstances] = useState<any[]>([]);
-  const [activeInstanceName, setActiveInstanceName] = useState("");
   const [showInstanceModal, setShowInstanceModal] = useState(false);
   const [instanceForm, setInstanceForm] = useState({ name: "", label: "", color: "#f59e0b" });
-  const [instanceSwitching, setInstanceSwitching] = useState(false);
 
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<any>(null);
@@ -503,7 +501,6 @@ export default function AdminConfig() {
     try {
       const data = await Instances.getAll();
       setInstances(data.instances || []);
-      setActiveInstanceName(data.activeInstance || "");
     } catch {}
   };
 
@@ -520,21 +517,6 @@ export default function AdminConfig() {
       loadInstances();
     } catch (err: any) {
       showMessage("Error: " + err.message, true);
-    }
-  };
-
-  const handleSwitchInstance = async (name: string) => {
-    if (!window.confirm(`Switch to instance "${name}"? All users will immediately see data from this instance.`)) return;
-    setInstanceSwitching(true);
-    try {
-      await Instances.switchTo(name);
-      showMessage(`Switched to instance: ${name}`);
-      loadInstances();
-      loadData(); // reload routes/vessels/service types for the new instance
-    } catch (err: any) {
-      showMessage("Error: " + err.message, true);
-    } finally {
-      setInstanceSwitching(false);
     }
   };
 
@@ -1872,78 +1854,59 @@ export default function AdminConfig() {
         {/* ===================== INSTANCES TAB (super_admin only) ===================== */}
         {activeSection === "instances" && currentUserRole === "super_admin" && (
           <div className="space-y-5">
-            {/* Current active instance banner */}
-            {instances.find((i) => i.name === activeInstanceName) && (() => {
-              const active = instances.find((i) => i.name === activeInstanceName);
-              return (
-                <div
-                  className="card p-5 border-l-4 flex items-center justify-between"
-                  style={{ borderLeftColor: active.color || '#10b981' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: active.color || '#10b981' }}>
-                      {icons.database("w-5 h-5 text-white")}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Currently Active</p>
-                      <p className="text-[16px] font-bold text-slate-900">{active.label}</p>
-                      <p className="text-[11px] font-mono text-slate-400">{active.db_name}</p>
-                    </div>
-                  </div>
-                  {instanceSwitching && (
-                    <div className="w-5 h-5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
-                  )}
-                </div>
-              );
-            })()}
+            {/* Info banner */}
+            <div className="card p-4 bg-violet-50/60 border-violet-200/60">
+              <p className="text-[12px] text-violet-800">
+                Each instance runs at its own URL path. Production is at <code className="font-mono bg-white px-1.5 py-0.5 rounded text-[11px]">/</code>,
+                other instances at <code className="font-mono bg-white px-1.5 py-0.5 rounded text-[11px]">/name/</code>.
+                Each instance has its own users, teams, bookings, and configuration — fully isolated.
+              </p>
+            </div>
 
             {/* Instance cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {instances.map((inst) => {
-                const isActive = inst.name === activeInstanceName;
+                const isProduction = inst.name === "production";
+                const instanceUrl = isProduction ? "/" : `/${inst.name}/`;
                 return (
                   <div
                     key={inst.id}
-                    className={`group card p-5 relative ${isActive ? "ring-2" : "hover:border-slate-300 hover:shadow-md"}`}
-                    style={isActive ? { ringColor: inst.color || '#10b981', borderColor: inst.color || '#10b981' } : {}}
+                    className="group card p-5 relative hover:border-slate-300 hover:shadow-md"
                   >
-                    {/* Status dot */}
-                    <div className="absolute top-4 right-4 flex items-center gap-2">
-                      {isActive && (
-                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: inst.color || '#10b981' }}>
-                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                          Active
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: (inst.color || '#10b981') + '20' }}>
-                      {icons.database(`w-5 h-5`)}
-                    </div>
-                    <h3 className="text-[14px] font-bold text-slate-900 mb-0.5 pr-20">{inst.label}</h3>
-                    <p className="text-[11px] font-mono text-slate-400 mb-1">{inst.name}</p>
-                    <p className="text-[10px] text-slate-400 mb-3">Database: {inst.db_name}</p>
-
-                    <div className="flex items-center gap-2">
-                      {!isActive && (
-                        <button
-                          onClick={() => handleSwitchInstance(inst.name)}
-                          disabled={instanceSwitching}
-                          className="btn-primary text-[11px] px-3 py-1.5 disabled:opacity-50"
-                        >
-                          Switch to this
-                        </button>
-                      )}
-                      {!isActive && inst.db_name !== (instances.find((i) => i.name === 'production')?.db_name) && (
+                    {/* Actions */}
+                    {!isProduction && (
+                      <div className="absolute top-3 right-3 z-20 flex items-center space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300">
                         <button
                           onClick={() => handleDeleteInstance(inst.name)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-2 rounded-xl text-rose-600 bg-rose-50/80 hover:bg-rose-100 sm:text-slate-400 sm:bg-transparent sm:hover:text-rose-600 sm:hover:bg-rose-50/80 transition-all duration-200"
                           title="Delete instance"
                         >
                           {icons.trash()}
                         </button>
-                      )}
+                      </div>
+                    )}
+
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: (inst.color || '#10b981') + '20' }}>
+                      {icons.database("w-5 h-5")}
                     </div>
+                    <h3 className="text-[14px] font-bold text-slate-900 mb-0.5 pr-12">{inst.label}</h3>
+                    <p className="text-[11px] font-mono text-slate-400 mb-1">{inst.db_name}</p>
+                    <p className="text-[10px] text-slate-400 mb-3">
+                      URL: <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{instanceUrl}</code>
+                    </p>
+
+                    <a
+                      href={instanceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors"
+                      style={{ backgroundColor: (inst.color || '#10b981') + '15', color: inst.color || '#10b981' }}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Open {inst.label}
+                    </a>
                   </div>
                 );
               })}

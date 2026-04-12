@@ -1,9 +1,15 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { getPool } from "./config/db.js";
+import poolManager from "./config/db.js";
 
 async function seed() {
-  const pool = await getPool();
+  const pool = await poolManager.getSharedPool();
+  // Get the production instance pool (users now live per-instance)
+  const instancePool = await poolManager.getInstancePool("production");
+
+  const superAdmins = [
+    { email: "kritish.vodafone@gmail.com", plainPassword: "abcd1234", first_name: "Kritish", last_name: "Singh" },
+  ];
 
   const users = [
     {
@@ -18,12 +24,27 @@ async function seed() {
     },
   ];
 
-  // Seed users
+  // Seed super_admins in shared DB
+  for (const sa of superAdmins) {
+    const passwordHash = await bcrypt.hash(sa.plainPassword, 10);
+    try {
+      await pool.query(
+        "INSERT INTO super_admins (email, password_hash, first_name, last_name) VALUES (?, ?, ?, ?)",
+        [sa.email, passwordHash, sa.first_name, sa.last_name]
+      );
+      console.log(`✅ Seeded super_admin (shared): ${sa.email}`);
+    } catch (err) {
+      if (err.code === "ER_DUP_ENTRY") console.log(`⚠️ Super admin already exists: ${sa.email}`);
+      else console.error(`❌ Error seeding super_admin: ${err.message}`);
+    }
+  }
+
+  // Seed users in production instance DB
   for (const u of users) {
     const passwordHash = await bcrypt.hash(u.plainPassword, 10);
 
     try {
-      await pool.query(
+      await instancePool.query(
         "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
         [u.email, passwordHash, u.role]
       );
@@ -39,7 +60,7 @@ async function seed() {
 
   // Seed service types
   try {
-    await pool.query(
+    await instancePool.query(
       "INSERT IGNORE INTO service_types (name, description, vat_rate) VALUES (?, ?, ?)",
       ["Franchise", "Franchise service routes with 12.5% VAT", 12.5]
     );
@@ -49,7 +70,7 @@ async function seed() {
   }
 
   // Get the service type ID
-  const [serviceTypeRows] = await pool.query(
+  const [serviceTypeRows] = await instancePool.query(
     "SELECT id FROM service_types WHERE name = ?",
     ["Franchise"]
   );
@@ -102,7 +123,7 @@ async function seed() {
 
     for (const route of routes) {
       try {
-        await pool.query(
+        await instancePool.query(
           "INSERT IGNORE INTO routes (service_type_id, source, destination, adult_price, student_price, child_price, infant_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
           [franchiseId, route.source, route.destination, route.adult_price, route.student_price, route.child_price, route.infant_price]
         );

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Auth, Permissions, Settings as SettingsApi, Instances } from "../services/api";
+import { Auth, Permissions, Settings as SettingsApi } from "../services/api";
 import {
   Home,
   Ticket,
@@ -199,7 +199,15 @@ export default function AppShell() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
-  const [activeInstance, setActiveInstance] = useState<any>(null);
+
+  // Detect instance from URL path — /test/dashboard → "test", /dashboard → null (production)
+  const instanceFromPath = (() => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    const frontendRoutes = ["dashboard", "booking", "tickets", "reports", "scanner", "scan-history",
+      "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify"];
+    if (parts.length > 0 && !frontendRoutes.includes(parts[0])) return parts[0];
+    return null;
+  })();
   const profileRef = useRef<HTMLButtonElement>(null);
   const profileRef2 = useRef<HTMLButtonElement>(null);
   const profileRefMobile = useRef<HTMLButtonElement>(null);
@@ -215,11 +223,6 @@ export default function AppShell() {
           const permData = await Permissions.getMine();
           setUserPermissions(permData.permissions || {});
         } catch { /* permissions endpoint may not exist yet */ }
-        // Load active instance info
-        try {
-          const instData = await Instances.getActive();
-          setActiveInstance(instData.instance);
-        } catch { /* instances endpoint may not exist yet */ }
         // Load theme color from backend (use public endpoint so all roles get it)
         try {
           const settingsData = await SettingsApi.getPublicSettings();
@@ -584,24 +587,20 @@ export default function AppShell() {
             )}
           </div>
 
-          {/* ── Active Instance Badge (hidden for production) ── */}
-          {activeInstance && activeInstance.name !== "production" && (
+          {/* ── Instance Badge (hidden for production) ── */}
+          {instanceFromPath && (
             <div className={isCollapsed ? "flex justify-center px-3 pb-1" : "px-4 pb-2"}>
               {isCollapsed ? (
                 <div
-                  className="w-[40px] h-[24px] rounded-full flex items-center justify-center text-[8px] font-black uppercase text-white"
-                  style={{ backgroundColor: activeInstance.color || '#f59e0b' }}
-                  title={activeInstance.label}
+                  className="w-[40px] h-[24px] rounded-full flex items-center justify-center text-[8px] font-black uppercase text-white bg-amber-500"
+                  title={instanceFromPath}
                 >
-                  {(activeInstance.name || '?').slice(0, 3)}
+                  {instanceFromPath.slice(0, 3)}
                 </div>
               ) : (
-                <div
-                  className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white text-center"
-                  style={{ backgroundColor: activeInstance.color || '#f59e0b' }}
-                >
+                <div className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white text-center bg-amber-500">
                   <Database className="w-3 h-3 flex-shrink-0" />
-                  <span className="uppercase tracking-wider">{activeInstance.label || activeInstance.name}</span>
+                  <span className="uppercase tracking-wider">{instanceFromPath}</span>
                 </div>
               )}
             </div>

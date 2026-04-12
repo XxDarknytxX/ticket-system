@@ -56,6 +56,10 @@ export function makeAdminController(pool) {
     console.warn("⚠️ JWT_SECRET is not set. Tokens cannot be verified across restarts.");
   }
 
+  // Instance pool — all user/team/booking queries go here.
+  // pool = shared DB (super_admins, database_instances); req.instancePool = instance DB.
+  const db = (req) => req.instancePool || pool;
+
   return {
     // POST /api/register
     register: async (req, res) => {
@@ -64,11 +68,11 @@ export function makeAdminController(pool) {
 
       const { email, password, role = "agent" } = req.body;
       try {
-        const existing = await findUserByEmail(pool, email);
+        const existing = await findUserByEmail(db(req), email);
         if (existing) return send.bad(res, "Email already registered");
 
         const passwordHash = await bcrypt.hash(password, 10);
-        const user = await createUser(pool, { email, passwordHash, role });
+        const user = await createUser(db(req), { email, passwordHash, role });
         return send.created(res, { id: user.id, email: user.email, role: user.role });
       } catch (e) {
         console.error(e);
@@ -77,26 +81,52 @@ export function makeAdminController(pool) {
     },
 
     // POST /api/login
+    // Checks super_admins table (shared DB) first, then instance users table.
     login: async (req, res) => {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return send.bad(res, errors.array()[0].msg);
 
       const { email, password } = req.body;
+      const instancePool = db(req);
+      const auditPool = instancePool; // audit logs go to the instance DB
+
       try {
-        const user = await findUserByEmail(pool, email);
+        // 1. Check super_admins table in shared DB
+        const sharedDb = req.sharedPool || pool;
+        const [saRows] = await sharedDb.query(
+          "SELECT id, email, password_hash, first_name, last_name FROM super_admins WHERE email = ?",
+          [email]
+        );
+
+        if (saRows.length > 0) {
+          const sa = saRows[0];
+          const ok = await bcrypt.compare(password, sa.password_hash);
+          if (ok) {
+            const token = jwt.sign(
+              { id: sa.id, email: sa.email, role: "super_admin", terminal_id: "01", team_id: null, isSuperAdmin: true },
+              process.env.JWT_SECRET,
+              { expiresIn: "8h" }
+            );
+            try { await logAudit(auditPool, { user: { id: sa.id, email: sa.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "super_admin", targetId: sa.id }); } catch {}
+            return send.ok(res, { token, role: "super_admin" });
+          }
+        }
+
+        // 2. Check instance users table
+        const user = await findUserByEmail(instancePool, email);
         if (!user) {
-          await logAnonAudit(pool, req, { action: "login.failed", userEmail: email, details: { reason: "user_not_found" } });
+          try { await logAnonAudit(auditPool, req, { action: "login.failed", userEmail: email, details: { reason: "user_not_found" } }); } catch {}
           return send.bad(res, "Invalid credentials");
         }
 
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) {
-          await logAnonAudit(pool, req, { action: "login.failed", userEmail: email, details: { reason: "bad_password" } });
+          try { await logAnonAudit(auditPool, req, { action: "login.failed", userEmail: email, details: { reason: "bad_password" } }); } catch {}
           return send.bad(res, "Invalid credentials");
         }
 
         if (user.is_active === 0 || user.is_active === false) {
-          await logAnonAudit(pool, req, { action: "login.blocked", userEmail: email, details: { reason: "account_deactivated" } });
+          try { await logAnonAudit(auditPool, req, { action: "login.blocked", userEmail: email, details: { reason: "account_deactivated" } }); } catch {}
           return send.forbidden(res, "Account is deactivated. Contact your administrator.");
         }
 
@@ -105,8 +135,7 @@ export function makeAdminController(pool) {
           process.env.JWT_SECRET,
           { expiresIn: "2h" }
         );
-        // Log login as the authenticated user
-        await logAudit(pool, { user: { id: user.id, email: user.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "user", targetId: user.id });
+        try { await logAudit(auditPool, { user: { id: user.id, email: user.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "user", targetId: user.id }); } catch {}
         return send.ok(res, { token, role: user.role });
       } catch (e) {
         console.error(e);
@@ -117,7 +146,21 @@ export function makeAdminController(pool) {
     // GET /api/me
     me: async (req, res) => {
       try {
-        const user = await findUserById(pool, req.user.id);
+        // Super_admin: try instance users first (may have a mirror), then shared super_admins, then JWT fallback
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          // Try to get fresh data from shared super_admins
+          const sharedDb = req.sharedPool || pool;
+          const [saRows] = await sharedDb.query(
+            "SELECT id, email, first_name, last_name FROM super_admins WHERE email = ?",
+            [req.user.email]
+          );
+          if (saRows.length > 0) {
+            const sa = saRows[0];
+            return send.ok(res, { user: { id: sa.id, email: sa.email, first_name: sa.first_name, last_name: sa.last_name, role: "super_admin", terminal_id: "01" } });
+          }
+        }
+        // Regular users: read from instance DB
+        const user = await findUserById(db(req), req.user.id);
         if (user) return send.ok(res, { user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name, role: user.role, terminal_id: user.terminal_id } });
         return send.ok(res, { user: { id: req.user.id, email: req.user.email, role: req.user.role } });
       } catch {
@@ -137,7 +180,7 @@ export function makeAdminController(pool) {
       }
 
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.terminal_id, u.team_id,
                   t.name AS team_name, u.is_active, u.deactivated_at, u.created_at, u.created_by,
                   cb.first_name AS created_by_first_name, cb.last_name AS created_by_last_name, cb.email AS created_by_email
@@ -171,23 +214,23 @@ export function makeAdminController(pool) {
 
       try {
         // Check per-role license limit
-        const license = await checkLicenseLimit(pool, role);
+        const license = await checkLicenseLimit(db(req), role);
         if (!license.ok) {
           return send.bad(res, `License limit reached for role '${role}' (${license.current}/${license.limit}). Deactivate an existing ${role} or increase the limit.`);
         }
 
-        const existing = await findUserByEmail(pool, email);
+        const existing = await findUserByEmail(db(req), email);
         if (existing) return send.bad(res, "Email already registered");
 
         const passwordHash = await bcrypt.hash(password, 10);
-        const user = await createUser(pool, { email, firstName: first_name, lastName: last_name, passwordHash, role, terminalId: terminal_id, teamId: team_id, createdBy: req.user.id });
+        const user = await createUser(db(req), { email, firstName: first_name, lastName: last_name, passwordHash, role, terminalId: terminal_id, teamId: team_id, createdBy: req.user.id });
 
-        const [newUser] = await pool.query(
+        const [newUser] = await db(req).query(
           "SELECT id, email, first_name, last_name, role, terminal_id, team_id, created_at FROM users WHERE id = ?",
           [user.id]
         );
 
-        await logAudit(pool, req, { action: "user.create", targetType: "user", targetId: user.id, details: { email, role, terminal_id } });
+        await logAudit(db(req), req, { action: "user.create", targetType: "user", targetId: user.id, details: { email, role, terminal_id } });
         return send.created(res, { user: newUser[0] });
       } catch (e) {
         console.error(e);
@@ -213,7 +256,7 @@ export function makeAdminController(pool) {
         const updateValues = [];
 
         if (email) {
-          const existingUser = await findUserByEmail(pool, email);
+          const existingUser = await findUserByEmail(db(req), email);
           if (existingUser && existingUser.id !== parseInt(id)) {
             return send.bad(res, "Email already taken by another user");
           }
@@ -258,7 +301,7 @@ export function makeAdminController(pool) {
 
         updateValues.push(id);
 
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           `UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`,
           updateValues
         );
@@ -267,8 +310,8 @@ export function makeAdminController(pool) {
           return send.notFound(res, "User not found");
         }
 
-        const updatedUser = await findUserById(pool, id);
-        await logAudit(pool, req, { action: "user.update", targetType: "user", targetId: id, details: { fields: updateFields.map(f => f.split(" = ")[0]) } });
+        const updatedUser = await findUserById(db(req), id);
+        await logAudit(db(req), req, { action: "user.update", targetType: "user", targetId: id, details: { fields: updateFields.map(f => f.split(" = ")[0]) } });
         return send.ok(res, { user: updatedUser });
       } catch (e) {
         console.error(e);
@@ -281,9 +324,9 @@ export function makeAdminController(pool) {
       if (req.user.role !== "admin" && req.user.role !== "super_admin") return send.forbidden(res);
       const { id } = req.params;
       try {
-        const [result] = await pool.query("UPDATE users SET is_active = 1, deactivated_at = NULL WHERE id = ?", [id]);
+        const [result] = await db(req).query("UPDATE users SET is_active = 1, deactivated_at = NULL WHERE id = ?", [id]);
         if (result.affectedRows === 0) return send.notFound(res, "User not found");
-        await logAudit(pool, req, { action: "user.activate", targetType: "user", targetId: id });
+        await logAudit(db(req), req, { action: "user.activate", targetType: "user", targetId: id });
         return send.ok(res, { message: "User activated" });
       } catch (e) {
         console.error(e);
@@ -297,9 +340,9 @@ export function makeAdminController(pool) {
       const { id } = req.params;
       if (parseInt(id) === req.user.id) return send.bad(res, "Cannot deactivate your own account");
       try {
-        const [result] = await pool.query("UPDATE users SET is_active = 0, deactivated_at = NOW() WHERE id = ?", [id]);
+        const [result] = await db(req).query("UPDATE users SET is_active = 0, deactivated_at = NOW() WHERE id = ?", [id]);
         if (result.affectedRows === 0) return send.notFound(res, "User not found");
-        await logAudit(pool, req, { action: "user.deactivate", targetType: "user", targetId: id });
+        await logAudit(db(req), req, { action: "user.deactivate", targetType: "user", targetId: id });
         return send.ok(res, { message: "User deactivated" });
       } catch (e) {
         console.error(e);
@@ -320,12 +363,12 @@ export function makeAdminController(pool) {
       }
 
       try {
-        const user = await findUserById(pool, id);
+        const user = await findUserById(db(req), id);
         if (!user) {
           return send.notFound(res, "User not found");
         }
 
-        const [bookings] = await pool.query(
+        const [bookings] = await db(req).query(
           "SELECT COUNT(*) as count FROM bookings WHERE booked_by = ?",
           [id]
         );
@@ -336,12 +379,12 @@ export function makeAdminController(pool) {
           );
         }
 
-        const [result] = await pool.query("DELETE FROM users WHERE id = ?", [id]);
+        const [result] = await db(req).query("DELETE FROM users WHERE id = ?", [id]);
         if (result.affectedRows === 0) {
           return send.notFound(res, "User not found");
         }
 
-        await logAudit(pool, req, { action: "user.delete", targetType: "user", targetId: id, details: { email: user.email, role: user.role } });
+        await logAudit(db(req), req, { action: "user.delete", targetType: "user", targetId: id, details: { email: user.email, role: user.role } });
         return send.ok(res, { message: "User deleted successfully" });
       } catch (e) {
         console.error(e);
@@ -358,7 +401,7 @@ export function makeAdminController(pool) {
       const { id } = req.params;
 
       try {
-        const user = await findUserById(pool, id);
+        const user = await findUserById(db(req), id);
         if (!user) {
           return send.notFound(res, "User not found");
         }
@@ -374,13 +417,13 @@ export function makeAdminController(pool) {
 
     getTeams: async (req, res) => {
       try {
-        const [teams] = await pool.query(
+        const [teams] = await db(req).query(
           `SELECT t.*, COUNT(u.id) AS member_count
            FROM teams t LEFT JOIN users u ON u.team_id = t.id
            GROUP BY t.id ORDER BY t.name`
         );
         // Also get members for each team
-        const [members] = await pool.query(
+        const [members] = await db(req).query(
           `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.terminal_id, u.team_id
            FROM users u WHERE u.team_id IS NOT NULL ORDER BY u.first_name`
         );
@@ -396,12 +439,12 @@ export function makeAdminController(pool) {
       const { name, team_code, description, color } = req.body;
       if (!name) return send.bad(res, "Team name is required");
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "INSERT INTO teams (name, team_code, description, color) VALUES (?, ?, ?, ?)",
           [name, team_code || '00', description || null, color || '#0d9488']
         );
-        const [team] = await pool.query("SELECT * FROM teams WHERE id = ?", [result.insertId]);
-        await logAudit(pool, req, { action: "team.create", targetType: "team", targetId: result.insertId, details: { name, team_code } });
+        const [team] = await db(req).query("SELECT * FROM teams WHERE id = ?", [result.insertId]);
+        await logAudit(db(req), req, { action: "team.create", targetType: "team", targetId: result.insertId, details: { name, team_code } });
         return send.created(res, { team: team[0] });
       } catch (e) {
         console.error(e);
@@ -422,9 +465,9 @@ export function makeAdminController(pool) {
         if (color) { fields.push("color = ?"); vals.push(color); }
         if (fields.length === 0) return send.bad(res, "Nothing to update");
         vals.push(id);
-        await pool.query(`UPDATE teams SET ${fields.join(", ")} WHERE id = ?`, vals);
-        const [team] = await pool.query("SELECT * FROM teams WHERE id = ?", [id]);
-        await logAudit(pool, req, { action: "team.update", targetType: "team", targetId: id, details: { fields: fields.map(f => f.split(" = ")[0]) } });
+        await db(req).query(`UPDATE teams SET ${fields.join(", ")} WHERE id = ?`, vals);
+        const [team] = await db(req).query("SELECT * FROM teams WHERE id = ?", [id]);
+        await logAudit(db(req), req, { action: "team.update", targetType: "team", targetId: id, details: { fields: fields.map(f => f.split(" = ")[0]) } });
         return send.ok(res, { team: team[0] });
       } catch (e) {
         console.error(e);
@@ -436,11 +479,11 @@ export function makeAdminController(pool) {
       if (req.user.role !== "admin" && req.user.role !== "super_admin") return send.forbidden(res);
       const { id } = req.params;
       try {
-        const [teamRows] = await pool.query("SELECT name FROM teams WHERE id = ?", [id]);
+        const [teamRows] = await db(req).query("SELECT name FROM teams WHERE id = ?", [id]);
         // Unassign users first
-        await pool.query("UPDATE users SET team_id = NULL WHERE team_id = ?", [id]);
-        await pool.query("DELETE FROM teams WHERE id = ?", [id]);
-        await logAudit(pool, req, { action: "team.delete", targetType: "team", targetId: id, details: { name: teamRows[0]?.name } });
+        await db(req).query("UPDATE users SET team_id = NULL WHERE team_id = ?", [id]);
+        await db(req).query("DELETE FROM teams WHERE id = ?", [id]);
+        await logAudit(db(req), req, { action: "team.delete", targetType: "team", targetId: id, details: { name: teamRows[0]?.name } });
         return send.ok(res, { message: "Team deleted" });
       } catch (e) {
         console.error(e);
@@ -458,8 +501,8 @@ export function makeAdminController(pool) {
         const vals = [team_id || null];
         if (terminal_id) { fields.push("terminal_id = ?"); vals.push(terminal_id); }
         vals.push(user_id);
-        await pool.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, vals);
-        await logAudit(pool, req, { action: "team.assign_user", targetType: "user", targetId: user_id, details: { team_id, terminal_id } });
+        await db(req).query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, vals);
+        await logAudit(db(req), req, { action: "team.assign_user", targetType: "user", targetId: user_id, details: { team_id, terminal_id } });
         return send.ok(res, { message: "User updated" });
       } catch (e) {
         console.error(e);
@@ -471,7 +514,7 @@ export function makeAdminController(pool) {
 
     getPermissions: async (req, res) => {
       try {
-        const [rows] = await pool.query("SELECT * FROM role_permissions ORDER BY role_name, permission");
+        const [rows] = await db(req).query("SELECT * FROM role_permissions ORDER BY role_name, permission");
         const byRole = {};
         rows.forEach(r => {
           if (!byRole[r.role_name]) byRole[r.role_name] = {};
@@ -497,9 +540,9 @@ export function makeAdminController(pool) {
         // Create permission entries for this role
         const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams"];
         const values = allPerms.map(p => [name, p, permissions?.[p] ? true : false]);
-        await pool.query("DELETE FROM role_permissions WHERE role_name = ?", [name]);
+        await db(req).query("DELETE FROM role_permissions WHERE role_name = ?", [name]);
         for (const v of values) {
-          await pool.query("INSERT INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)", v);
+          await db(req).query("INSERT INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)", v);
         }
         return send.created(res, { role_name: name, message: "Role created" });
       } catch (e) {
@@ -514,9 +557,9 @@ export function makeAdminController(pool) {
       if (["super_admin", "admin", "agent", "dock"].includes(role_name)) return send.bad(res, "Cannot delete built-in roles");
       try {
         // Check if any users have this role
-        const [users] = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = ?", [role_name]);
+        const [users] = await db(req).query("SELECT COUNT(*) as count FROM users WHERE role = ?", [role_name]);
         if (users[0].count > 0) return send.bad(res, `Cannot delete role "${role_name}" - ${users[0].count} user(s) still assigned to it`);
-        await pool.query("DELETE FROM role_permissions WHERE role_name = ?", [role_name]);
+        await db(req).query("DELETE FROM role_permissions WHERE role_name = ?", [role_name]);
         return send.ok(res, { message: "Role deleted" });
       } catch (e) {
         console.error(e);
@@ -533,7 +576,7 @@ export function makeAdminController(pool) {
       // Only super_admin can modify admin permissions
       if (role_name === "admin" && req.user.role !== "super_admin") return send.bad(res, "Only super_admin can modify admin permissions");
       try {
-        await pool.query(
+        await db(req).query(
           `INSERT INTO role_permissions (role_name, permission, granted) VALUES (?, ?, ?)
            ON DUPLICATE KEY UPDATE granted = ?`,
           [role_name, permission, !!granted, !!granted]
@@ -548,7 +591,7 @@ export function makeAdminController(pool) {
     // Get permissions for the current user's role
     getMyPermissions: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           "SELECT permission, granted FROM role_permissions WHERE role_name = ?",
           [req.user.role]
         );
@@ -571,7 +614,7 @@ export function makeAdminController(pool) {
 
         // Discover custom roles from role_permissions table
         const placeholders = builtInRoles.map(() => "?").join(",");
-        const [customRoleRows] = await pool.query(
+        const [customRoleRows] = await db(req).query(
           `SELECT DISTINCT role_name FROM role_permissions WHERE role_name NOT IN (${placeholders})`,
           builtInRoles
         );
@@ -582,21 +625,21 @@ export function makeAdminController(pool) {
         const active = {};
         const inactive = {};
         for (const role of allRoles) {
-          const [limRows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = ?", [`license_max_${role}`]);
+          const [limRows] = await db(req).query("SELECT setting_value FROM system_settings WHERE setting_key = ?", [`license_max_${role}`]);
           limits[role] = limRows.length > 0 ? parseInt(limRows[0].setting_value) : (defaults[role] || 5);
-          const [actRows] = await pool.query("SELECT COUNT(*) as c FROM users WHERE role = ? AND is_active = 1", [role]);
+          const [actRows] = await db(req).query("SELECT COUNT(*) as c FROM users WHERE role = ? AND is_active = 1", [role]);
           active[role] = actRows[0].c;
-          const [inactRows] = await pool.query("SELECT COUNT(*) as c FROM users WHERE role = ? AND is_active = 0", [role]);
+          const [inactRows] = await db(req).query("SELECT COUNT(*) as c FROM users WHERE role = ? AND is_active = 0", [role]);
           inactive[role] = inactRows[0].c;
         }
-        const [users] = await pool.query(
+        const [users] = await db(req).query(
           "SELECT id, email, first_name, last_name, role, is_active, deactivated_at, terminal_id FROM users ORDER BY role, first_name"
         );
 
         // Fetch permissions for custom roles
         const customRoles = {};
         for (const roleName of customRoleNames) {
-          const [permRows] = await pool.query("SELECT permission, granted FROM role_permissions WHERE role_name = ?", [roleName]);
+          const [permRows] = await db(req).query("SELECT permission, granted FROM role_permissions WHERE role_name = ?", [roleName]);
           const perms = {};
           permRows.forEach(r => { perms[r.permission] = !!r.granted; });
           customRoles[roleName] = perms;
@@ -617,12 +660,12 @@ export function makeAdminController(pool) {
         for (const [role, value] of Object.entries(limits)) {
           const val = parseInt(String(value));
           if (isNaN(val) || val < 0) continue;
-          await pool.query(
+          await db(req).query(
             "INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?",
             [`license_max_${role}`, String(val), String(val)]
           );
         }
-        await logAudit(pool, req, { action: "license.update", targetType: "license", details: { limits } });
+        await logAudit(db(req), req, { action: "license.update", targetType: "license", details: { limits } });
         return send.ok(res, { limits });
       } catch (e) {
         console.error(e);
@@ -650,16 +693,16 @@ export function makeAdminController(pool) {
       }
       const whereClause = where.length > 0 ? "WHERE " + where.join(" AND ") : "";
       try {
-        const [countRows] = await pool.query(`SELECT COUNT(*) as total FROM audit_logs ${whereClause}`, params);
+        const [countRows] = await db(req).query(`SELECT COUNT(*) as total FROM audit_logs ${whereClause}`, params);
         const total = countRows[0].total;
-        const [logs] = await pool.query(
+        const [logs] = await db(req).query(
           `SELECT id, user_id, user_email, action, target_type, target_id, details, ip_address, user_agent, created_at
            FROM audit_logs ${whereClause}
            ORDER BY created_at DESC LIMIT ? OFFSET ?`,
           [...params, limitNum, offset]
         );
         // Get distinct action types for the filter dropdown
-        const [actions] = await pool.query("SELECT DISTINCT action FROM audit_logs ORDER BY action");
+        const [actions] = await db(req).query("SELECT DISTINCT action FROM audit_logs ORDER BY action");
         return send.ok(res, {
           logs: logs.map(l => ({ ...l, details: l.details ? (typeof l.details === "string" ? JSON.parse(l.details) : l.details) : null })),
           total,
@@ -678,7 +721,7 @@ export function makeAdminController(pool) {
       if (!["admin", "super_admin"].includes(req.user.role)) return send.forbidden(res);
       const { id } = req.params;
       try {
-        const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
+        const [rows] = await db(req).query("SELECT * FROM users WHERE id = ?", [id]);
         if (rows.length === 0) return send.notFound(res, "User not found");
         const user = rows[0];
 
@@ -694,7 +737,7 @@ export function makeAdminController(pool) {
           html: onboardingEmail({ firstName: user.first_name, email: user.email, resetLink, accent: await getAccentColor(pool) }),
         });
 
-        await logAudit(pool, req, { action: "user.onboarding_sent", targetType: "user", targetId: id, details: { email: user.email } });
+        await logAudit(db(req), req, { action: "user.onboarding_sent", targetType: "user", targetId: id, details: { email: user.email } });
         return send.ok(res, { message: "Onboarding email sent" });
       } catch (e) {
         console.error("Send onboarding error:", e);
@@ -706,7 +749,7 @@ export function makeAdminController(pool) {
       if (!["admin", "super_admin"].includes(req.user.role)) return send.forbidden(res);
       const { id } = req.params;
       try {
-        const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
+        const [rows] = await db(req).query("SELECT * FROM users WHERE id = ?", [id]);
         if (rows.length === 0) return send.notFound(res, "User not found");
         const user = rows[0];
 
@@ -722,7 +765,7 @@ export function makeAdminController(pool) {
           html: resetPasswordEmail({ firstName: user.first_name, resetLink, accent: await getAccentColor(pool) }),
         });
 
-        await logAudit(pool, req, { action: "user.password_reset", targetType: "user", targetId: id, details: { email: user.email } });
+        await logAudit(db(req), req, { action: "user.password_reset", targetType: "user", targetId: id, details: { email: user.email } });
         return send.ok(res, { message: "Password reset email sent" });
       } catch (e) {
         console.error("Reset password error:", e);
@@ -738,7 +781,7 @@ export function makeAdminController(pool) {
       try {
         const userId = await validateResetToken(pool, token);
         const hash = await bcrypt.hash(password, 10);
-        await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
+        await db(req).query("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
         return send.ok(res, { message: "Password updated successfully" });
       } catch (e) {
         return send.bad(res, e.message);
@@ -750,7 +793,7 @@ export function makeAdminController(pool) {
       const { max_users } = req.body;
       if (!max_users || max_users < 1) return send.bad(res, "Invalid max_users value");
       try {
-        await pool.query(
+        await db(req).query(
           "INSERT INTO system_settings (setting_key, setting_value) VALUES ('max_users', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
           [String(max_users), String(max_users)]
         );

@@ -63,7 +63,8 @@ export function requirePermission(pool, permission) {
     if (req.user.role === "super_admin") return next();
 
     try {
-      const [rows] = await pool.query(
+      const permPool = req.instancePool || pool;
+      const [rows] = await permPool.query(
         "SELECT granted FROM role_permissions WHERE role_name = ? AND permission = ?",
         [req.user.role, permission]
       );

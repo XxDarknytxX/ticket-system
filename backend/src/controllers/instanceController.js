@@ -1,4 +1,5 @@
 /** Instance Controller — manage database instances (super_admin only) */
+import bcrypt from "bcryptjs";
 import { logAudit } from "../utils/audit.js";
 
 const send = {
@@ -22,29 +23,16 @@ export function makeInstanceController(poolManager) {
       try {
         const pool = await sharedPool();
         const [rows] = await pool.query(
-          "SELECT * FROM database_instances ORDER BY is_active DESC, created_at ASC"
+          "SELECT * FROM database_instances ORDER BY created_at ASC"
         );
-        const activeName = await poolManager.getActiveInstanceName();
-        return send.ok(res, { instances: rows, activeInstance: activeName });
+        return send.ok(res, { instances: rows });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
       }
     },
 
-    // GET /api/instances/active
-    getActiveInstance: async (_req, res) => {
-      try {
-        const name = await poolManager.getActiveInstanceName();
-        const info = await poolManager.getInstanceInfo(name);
-        return send.ok(res, { activeInstance: name, instance: info });
-      } catch (e) {
-        console.error(e);
-        return send.serverErr(res);
-      }
-    },
-
-    // POST /api/instances
+    // POST /api/instances — create a new instance with its own DB
     createInstance: async (req, res) => {
       const { name, label, color } = req.body;
       if (!name || !String(name).trim()) return send.bad(res, "Instance name is required");
@@ -65,64 +53,39 @@ export function makeInstanceController(poolManager) {
         );
         if (existing.length > 0) return send.bad(res, "An instance with this name already exists");
 
-        // Create the actual MySQL database + tables
+        // Create the actual MySQL database + all instance tables
         const instancePool = await poolManager.createInstanceDb(dbName);
+
+        // Seed the super_admin user into the new instance's users table
+        // so they can log in from the new instance URL
+        const [saRows] = await pool.query("SELECT * FROM super_admins");
+        for (const sa of saRows) {
+          try {
+            await instancePool.query(
+              `INSERT IGNORE INTO users (email, first_name, last_name, password_hash, role, terminal_id) VALUES (?, ?, ?, ?, 'super_admin', '01')`,
+              [sa.email, sa.first_name || null, sa.last_name || null, sa.password_hash]
+            );
+          } catch {} // ignore if already exists
+        }
 
         // Register in the shared database
         const [result] = await pool.query(
-          "INSERT INTO database_instances (name, label, db_name, is_active, color) VALUES (?, ?, ?, FALSE, ?)",
+          "INSERT INTO database_instances (name, label, db_name, color) VALUES (?, ?, ?, ?)",
           [slug, String(label).trim(), dbName, color || "#f59e0b"]
         );
 
         const [newRow] = await pool.query("SELECT * FROM database_instances WHERE id = ?", [result.insertId]);
 
-        await logAudit(pool, req, {
-          action: "instance.create",
-          targetType: "instance",
-          targetId: slug,
-          details: { label, dbName },
-        });
+        try {
+          await logAudit(instancePool, req, {
+            action: "instance.create",
+            targetType: "instance",
+            targetId: slug,
+            details: { label, dbName },
+          });
+        } catch {}
 
         return send.created(res, { instance: newRow[0] });
-      } catch (e) {
-        console.error(e);
-        return send.serverErr(res);
-      }
-    },
-
-    // POST /api/instances/:name/switch
-    switchInstance: async (req, res) => {
-      const { name } = req.params;
-      try {
-        const pool = await sharedPool();
-
-        const info = await poolManager.getInstanceInfo(name);
-        if (!info) return send.notFound(res, "Instance not found");
-
-        // Verify the instance DB is accessible
-        try {
-          const iPool = await poolManager.getInstancePool(name);
-          await iPool.query("SELECT 1");
-        } catch (dbErr) {
-          return send.bad(res, `Cannot connect to instance database: ${dbErr.message}`);
-        }
-
-        // Update active flags
-        await pool.query("UPDATE database_instances SET is_active = FALSE");
-        await pool.query("UPDATE database_instances SET is_active = TRUE WHERE name = ?", [name]);
-        await pool.query(
-          "INSERT INTO system_settings (setting_key, setting_value) VALUES ('active_instance', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
-          [name, name]
-        );
-
-        await logAudit(pool, req, {
-          action: "instance.switch",
-          targetType: "instance",
-          targetId: name,
-          details: { label: info.label, dbName: info.db_name },
-        });
-
-        return send.ok(res, { activeInstance: name, instance: info });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
@@ -138,13 +101,12 @@ export function makeInstanceController(poolManager) {
         const info = await poolManager.getInstanceInfo(name);
         if (!info) return send.notFound(res, "Instance not found");
 
-        // Don't allow deleting the active instance
-        const activeName = await poolManager.getActiveInstanceName();
-        if (name === activeName) {
-          return send.bad(res, "Cannot delete the currently active instance. Switch to another instance first.");
+        // Don't allow deleting production
+        if (name === "production") {
+          return send.bad(res, "Cannot delete the production instance.");
         }
 
-        // Don't allow deleting production if it points to the shared DB
+        // Don't allow deleting if it points to the primary DB
         if (info.db_name === (process.env.DATABASE_NAME || "booking_app")) {
           return send.bad(res, "Cannot delete the primary production database instance.");
         }
@@ -154,13 +116,6 @@ export function makeInstanceController(poolManager) {
 
         // Remove the row
         await pool.query("DELETE FROM database_instances WHERE name = ?", [name]);
-
-        await logAudit(pool, req, {
-          action: "instance.delete",
-          targetType: "instance",
-          targetId: name,
-          details: { label: info.label, dbName: info.db_name },
-        });
 
         return send.ok(res, { success: true });
       } catch (e) {

@@ -14,19 +14,79 @@ const base = {
 };
 
 /**
- * Instance-specific tables that live in each instance database.
- * Everything else (users, teams, role_permissions, audit_logs, system_settings,
- * database_instances) stays in the shared database.
+ * Instance-specific tables — every instance DB gets ALL of these.
+ * Users, teams, role_permissions, and audit_logs are per-instance now.
  */
 const INSTANCE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS teams (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    team_code VARCHAR(4) NOT NULL DEFAULT '00',
+    description VARCHAR(255) NULL,
+    color VARCHAR(7) NOT NULL DEFAULT '#0d9488',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    first_name VARCHAR(100) NULL,
+    last_name VARCHAR(100) NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('super_admin','admin','agent','dock') NOT NULL DEFAULT 'agent',
+    terminal_id VARCHAR(4) NOT NULL DEFAULT '01',
+    team_id INT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    deactivated_at TIMESTAMP NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_users_email (email),
+    INDEX idx_users_role (role),
+    INDEX idx_users_is_active (is_active),
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS role_permissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL,
+    permission VARCHAR(100) NOT NULL,
+    granted BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_role_perm (role_name, permission),
+    INDEX idx_role_permissions_role (role_name)
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    user_email VARCHAR(255) NULL,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NULL,
+    target_id VARCHAR(100) NULL,
+    details JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_action (action),
+    INDEX idx_audit_date (created_at)
+  );
+
+  CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS service_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     description TEXT,
     vat_rate DECIMAL(5,2) NOT NULL DEFAULT 12.50,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_service_types_name (name)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS vessels (
@@ -35,8 +95,7 @@ const INSTANCE_SCHEMA = `
     seat_capacity INT NOT NULL DEFAULT 0,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_vessels_name (name)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS routes (
@@ -56,7 +115,6 @@ const INSTANCE_SCHEMA = `
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (service_type_id) REFERENCES service_types(id) ON DELETE CASCADE,
-    INDEX idx_routes_service_type (service_type_id),
     UNIQUE KEY unique_route (service_type_id, source, destination)
   );
 
@@ -67,8 +125,7 @@ const INSTANCE_SCHEMA = `
     phone VARCHAR(50) NULL,
     gender ENUM('male','female') NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_customers_name (name)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS ticket_counters (
@@ -116,6 +173,8 @@ const INSTANCE_SCHEMA = `
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
     FOREIGN KEY (vessel_id) REFERENCES vessels(id) ON DELETE SET NULL,
+    FOREIGN KEY (booked_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (boarded_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_bookings_ticket_id (ticket_id),
     INDEX idx_bookings_status (status),
     INDEX idx_bookings_travel_date (travel_date),
@@ -131,6 +190,7 @@ const INSTANCE_SCHEMA = `
     scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT NULL,
     FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    FOREIGN KEY (scanned_by) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_scans_booking (booking_id),
     INDEX idx_scans_date (scanned_at)
   );
@@ -140,20 +200,21 @@ const INSTANCE_SCHEMA = `
     ('m-paisa', 'M-PAiSA', 2),
     ('my-cash', 'MyCash', 3),
     ('card', 'Card', 4);
+
+  INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('ticket_validity_days', '7');
 `;
 
 /**
- * PoolManager — manages a shared pool (users, settings) and per-instance pools
- * (bookings, routes, customers, etc.). All databases live on the same MySQL server.
+ * PoolManager — manages a shared pool (database_instances, super_admins)
+ * and per-instance pools (everything else including users).
  */
 class PoolManager {
   constructor() {
     this.sharedPool = null;
-    this.instancePools = new Map();       // name → pool
+    this.instancePools = new Map();
     this.sharedDbName = process.env.DATABASE_NAME || "booking_app";
   }
 
-  /** Get or create the shared database pool */
   async getSharedPool() {
     if (this.sharedPool) return this.sharedPool;
     const conn = await mysql.createConnection(base);
@@ -163,54 +224,50 @@ class PoolManager {
     await conn.end();
     this.sharedPool = mysql.createPool({ ...base, database: this.sharedDbName });
 
-    // Ensure the database_instances table exists in the shared DB
+    // Ensure shared-only tables exist
     await this.sharedPool.query(`
       CREATE TABLE IF NOT EXISTS database_instances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(50) NOT NULL UNIQUE,
         label VARCHAR(100) NOT NULL,
         db_name VARCHAR(100) NOT NULL UNIQUE,
-        is_active BOOLEAN NOT NULL DEFAULT FALSE,
         color VARCHAR(7) NOT NULL DEFAULT '#10b981',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
 
-    // Auto-create a "production" instance pointing to the current shared DB
-    // if no instances exist yet (first-run migration)
+    await this.sharedPool.query(`
+      CREATE TABLE IF NOT EXISTS super_admins (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100) NULL,
+        last_name VARCHAR(100) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Auto-register production instance if none exist
     const [rows] = await this.sharedPool.query("SELECT COUNT(*) AS c FROM database_instances");
     if (rows[0].c === 0) {
       await this.sharedPool.query(
-        `INSERT INTO database_instances (name, label, db_name, is_active, color) VALUES ('production', 'Production', ?, TRUE, '#10b981')`,
+        `INSERT INTO database_instances (name, label, db_name, color) VALUES ('production', 'Production', ?, '#10b981')`,
         [this.sharedDbName]
       );
-      await this.sharedPool.query(
-        `INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('active_instance', 'production')`
-      );
-      console.log("Auto-created 'production' instance from existing database");
+      console.log("Auto-registered 'production' instance");
     }
 
     return this.sharedPool;
   }
 
-  /** Get the name of the currently active instance */
-  async getActiveInstanceName() {
-    const pool = await this.getSharedPool();
-    const [rows] = await pool.query(
-      "SELECT setting_value FROM system_settings WHERE setting_key = 'active_instance'"
-    );
-    return rows.length > 0 ? rows[0].setting_value : "production";
-  }
-
-  /** Get instance metadata by name */
   async getInstanceInfo(name) {
     const pool = await this.getSharedPool();
     const [rows] = await pool.query("SELECT * FROM database_instances WHERE name = ?", [name]);
     return rows[0] || null;
   }
 
-  /** Get a pool for a specific instance database */
   async getInstancePool(instanceName) {
     if (this.instancePools.has(instanceName)) return this.instancePools.get(instanceName);
 
@@ -222,13 +279,6 @@ class PoolManager {
     return pool;
   }
 
-  /** Get the pool for the currently active instance */
-  async getActiveInstancePool() {
-    const name = await this.getActiveInstanceName();
-    return this.getInstancePool(name);
-  }
-
-  /** Create a new instance database and initialize its schema */
   async createInstanceDb(dbName) {
     const conn = await mysql.createConnection(base);
     await conn.query(
@@ -237,19 +287,14 @@ class PoolManager {
     await conn.end();
 
     const pool = mysql.createPool({ ...base, database: dbName });
-
-    // Run each statement separately (mysql2 doesn't support multi-statement by default)
     const statements = INSTANCE_SCHEMA.split(";").map(s => s.trim()).filter(Boolean);
     for (const stmt of statements) {
       await pool.query(stmt);
     }
-
     return pool;
   }
 
-  /** Drop an instance database */
   async dropInstanceDb(dbName) {
-    // Close the pool if cached
     for (const [name, pool] of this.instancePools) {
       const info = await this.getInstanceInfo(name);
       if (info && info.db_name === dbName) {
@@ -264,11 +309,9 @@ class PoolManager {
   }
 }
 
-// Singleton
 const poolManager = new PoolManager();
 export default poolManager;
 
-// Legacy compat — existing code that imports getPool still works
 export async function getPool() {
   return poolManager.getSharedPool();
 }

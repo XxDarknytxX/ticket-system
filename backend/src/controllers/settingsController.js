@@ -9,11 +9,13 @@ const send = {
 };
 
 export function makeSettingsController(pool) {
+  const db = (req) => req.instancePool || pool;
+
   return {
     // GET /api/settings/public - unauthenticated, returns only safe theme fields
-    getPublicSettings: async (_req, res) => {
+    getPublicSettings: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('primary_color','app_name')"
         );
         const settings = {};
@@ -26,9 +28,9 @@ export function makeSettingsController(pool) {
     },
 
     // GET /api/settings
-    getSettings: async (_req, res) => {
+    getSettings: async (req, res) => {
       try {
-        const [rows] = await pool.query("SELECT setting_key, setting_value FROM system_settings");
+        const [rows] = await db(req).query("SELECT setting_key, setting_value FROM system_settings");
         const settings = {};
         for (const row of rows) {
           settings[row.setting_key] = row.setting_value;
@@ -54,7 +56,7 @@ export function makeSettingsController(pool) {
       }
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           `INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?)
            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
           [key, String(value)]
@@ -63,7 +65,7 @@ export function makeSettingsController(pool) {
         // Redact sensitive values from audit log
         const sensitiveKeys = ["smtp_pass"];
         const auditValue = sensitiveKeys.includes(key) ? "***" : String(value);
-        await logAudit(pool, req, {
+        await logAudit(db(req), req, {
           action: "settings.update",
           targetType: "setting",
           targetId: key,
