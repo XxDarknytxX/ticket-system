@@ -477,6 +477,32 @@ export function makeAdminController(pool) {
           return send.notFound(res, "User not found");
         }
 
+        // If deleting a super_admin, remove from shared table + all instances
+        if (user.role === "super_admin") {
+          try {
+            const sharedDb = req.sharedPool || pool;
+            await sharedDb.query("DELETE FROM super_admins WHERE email = ?", [user.email]);
+            const [instances] = await sharedDb.query("SELECT db_name FROM database_instances");
+            const mysql = (await import("mysql2/promise")).default;
+            const baseConfig = {
+              host: process.env.DATABASE_HOST || "localhost",
+              port: Number(process.env.DATABASE_PORT || 3306),
+              user: process.env.DATABASE_USER,
+              password: process.env.DATABASE_PASSWORD,
+              waitForConnections: true, connectionLimit: 2, queueLimit: 0
+            };
+            for (const inst of instances) {
+              try {
+                const instPool = mysql.createPool({ ...baseConfig, database: inst.db_name });
+                await instPool.query("DELETE FROM users WHERE email = ? AND role = 'super_admin'", [user.email]);
+                await instPool.end();
+              } catch {}
+            }
+          } catch (e) {
+            console.error("Super admin delete sync error:", e.message);
+          }
+        }
+
         await logAudit(db(req), req, { action: "user.delete", targetType: "user", targetId: id, details: { email: user.email, role: user.role } });
         return send.ok(res, { message: "User deleted successfully" });
       } catch (e) {
