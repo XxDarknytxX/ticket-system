@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(100) NULL,
   last_name VARCHAR(100) NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('admin','agent','dock') NOT NULL DEFAULT 'agent',
+  role ENUM('super_admin','admin','agent','dock') NOT NULL DEFAULT 'agent',
   terminal_id VARCHAR(4) NOT NULL DEFAULT '01',
   team_id INT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -266,6 +266,22 @@ CREATE TABLE IF NOT EXISTS ticket_scans (
   INDEX idx_scans_scanned_by (scanned_by),
   INDEX idx_scans_result (scan_result),
   INDEX idx_scans_date (scanned_at)
+);
+
+-- ============================================================================
+-- ROLE-BASED PERMISSIONS (dynamic per-role permission grants)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  role_name VARCHAR(50) NOT NULL,
+  permission VARCHAR(100) NOT NULL,
+  granted BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  UNIQUE KEY unique_role_perm (role_name, permission),
+  INDEX idx_role_permissions_role (role_name)
 );
 
 -- ============================================================================

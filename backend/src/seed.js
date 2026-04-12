@@ -9,7 +9,7 @@ async function seed() {
     {
       email: "kritish.vodafone@gmail.com",
       plainPassword: "abcd1234",
-      role: "admin",
+      role: "super_admin",
     },
     {
       email: "kunaal.vodafone@gmail.com",

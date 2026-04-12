@@ -21,11 +21,13 @@ const slugify = (s) =>
 const isAdmin = (req) => req.user?.role === "admin" || req.user?.role === "super_admin";
 
 export function makePaymentMethodController(pool) {
+  const db = (req) => req.instancePool || pool;
+
   return {
     // GET /api/payment-methods  (any authenticated user)
-    getPaymentMethods: async (_req, res) => {
+    getPaymentMethods: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           "SELECT id, code, name, is_active, sort_order FROM payment_methods ORDER BY sort_order ASC, id ASC"
         );
         return send.ok(res, { paymentMethods: rows });
@@ -45,11 +47,11 @@ export function makePaymentMethodController(pool) {
       if (!finalCode) return send.bad(res, "Invalid code");
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "INSERT INTO payment_methods (code, name, sort_order) VALUES (?, ?, ?)",
           [finalCode, String(name).trim(), parseInt(sort_order) || 0]
         );
-        const [rows] = await pool.query("SELECT * FROM payment_methods WHERE id = ?", [result.insertId]);
+        const [rows] = await db(req).query("SELECT * FROM payment_methods WHERE id = ?", [result.insertId]);
         await logAudit(pool, req, {
           action: "payment_method.create",
           targetType: "payment_method",
@@ -71,7 +73,7 @@ export function makePaymentMethodController(pool) {
       const { name, is_active, sort_order } = req.body;
 
       try {
-        const [existing] = await pool.query("SELECT * FROM payment_methods WHERE id = ?", [id]);
+        const [existing] = await db(req).query("SELECT * FROM payment_methods WHERE id = ?", [id]);
         if (existing.length === 0) return send.notFound(res, "Payment method not found");
 
         const next = {
@@ -80,11 +82,11 @@ export function makePaymentMethodController(pool) {
           sort_order: sort_order !== undefined ? parseInt(sort_order) || 0 : existing[0].sort_order,
         };
 
-        await pool.query(
+        await db(req).query(
           "UPDATE payment_methods SET name = ?, is_active = ?, sort_order = ? WHERE id = ?",
           [next.name, next.is_active, next.sort_order, id]
         );
-        const [rows] = await pool.query("SELECT * FROM payment_methods WHERE id = ?", [id]);
+        const [rows] = await db(req).query("SELECT * FROM payment_methods WHERE id = ?", [id]);
         await logAudit(pool, req, {
           action: "payment_method.update",
           targetType: "payment_method",
@@ -103,10 +105,10 @@ export function makePaymentMethodController(pool) {
       if (!isAdmin(req)) return send.forbidden(res, "Admin access required");
       const { id } = req.params;
       try {
-        const [existing] = await pool.query("SELECT * FROM payment_methods WHERE id = ?", [id]);
+        const [existing] = await db(req).query("SELECT * FROM payment_methods WHERE id = ?", [id]);
         if (existing.length === 0) return send.notFound(res, "Payment method not found");
 
-        await pool.query("DELETE FROM payment_methods WHERE id = ?", [id]);
+        await db(req).query("DELETE FROM payment_methods WHERE id = ?", [id]);
         await logAudit(pool, req, {
           action: "payment_method.delete",
           targetType: "payment_method",

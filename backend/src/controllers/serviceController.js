@@ -11,13 +11,15 @@ const send = {
   serverErr: (res, msg = "Internal server error") => res.status(500).json({ error: msg }),
 };
 
-/** Factory */
+/** Factory — pool is the shared DB; instance-specific data uses req.instancePool */
 export function makeServiceController(pool) {
+  const db = (req) => req.instancePool || pool;
+
   return {
     // GET /api/service-types
-    getServiceTypes: async (_req, res) => {
+    getServiceTypes: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           "SELECT * FROM service_types ORDER BY created_at DESC"
         );
         return send.ok(res, { serviceTypes: rows });
@@ -38,12 +40,12 @@ export function makeServiceController(pool) {
 
       const { name, description, vat_rate = 12.5 } = req.body;
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "INSERT INTO service_types (name, description, vat_rate) VALUES (?, ?, ?)",
           [name, description, vat_rate]
         );
 
-        const [newServiceType] = await pool.query(
+        const [newServiceType] = await db(req).query(
           "SELECT * FROM service_types WHERE id = ?",
           [result.insertId]
         );
@@ -68,7 +70,7 @@ export function makeServiceController(pool) {
       const { name, description, vat_rate } = req.body;
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "UPDATE service_types SET name = ?, description = ?, vat_rate = ? WHERE id = ?",
           [name, description, vat_rate, id]
         );
@@ -77,7 +79,7 @@ export function makeServiceController(pool) {
           return send.notFound(res, "Service type not found");
         }
 
-        const [updated] = await pool.query(
+        const [updated] = await db(req).query(
           "SELECT * FROM service_types WHERE id = ?",
           [id]
         );
@@ -94,9 +96,9 @@ export function makeServiceController(pool) {
     // ============================================================================
 
     // GET /api/vessels
-    getVessels: async (_req, res) => {
+    getVessels: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           "SELECT * FROM vessels ORDER BY name ASC"
         );
         return send.ok(res, { vessels: rows });
@@ -117,12 +119,12 @@ export function makeServiceController(pool) {
 
       const { name, seat_capacity, description } = req.body;
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "INSERT INTO vessels (name, seat_capacity, description) VALUES (?, ?, ?)",
           [name, seat_capacity, description || null]
         );
 
-        const [newVessel] = await pool.query(
+        const [newVessel] = await db(req).query(
           "SELECT * FROM vessels WHERE id = ?",
           [result.insertId]
         );
@@ -147,7 +149,7 @@ export function makeServiceController(pool) {
       const { name, seat_capacity, description } = req.body;
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "UPDATE vessels SET name = ?, seat_capacity = ?, description = ? WHERE id = ?",
           [name, seat_capacity, description || null, id]
         );
@@ -156,7 +158,7 @@ export function makeServiceController(pool) {
           return send.notFound(res, "Vessel not found");
         }
 
-        const [updated] = await pool.query(
+        const [updated] = await db(req).query(
           "SELECT * FROM vessels WHERE id = ?",
           [id]
         );
@@ -178,7 +180,7 @@ export function makeServiceController(pool) {
 
       try {
         // Check if vessel is being used in any bookings
-        const [bookingsCheck] = await pool.query(
+        const [bookingsCheck] = await db(req).query(
           "SELECT COUNT(*) as count FROM bookings WHERE vessel_id = ?",
           [id]
         );
@@ -189,7 +191,7 @@ export function makeServiceController(pool) {
           );
         }
 
-        const [result] = await pool.query("DELETE FROM vessels WHERE id = ?", [id]);
+        const [result] = await db(req).query("DELETE FROM vessels WHERE id = ?", [id]);
 
         if (result.affectedRows === 0) {
           return send.notFound(res, "Vessel not found");
@@ -225,7 +227,7 @@ export function makeServiceController(pool) {
 
         query += " ORDER BY r.source, r.destination";
 
-        const [rows] = await pool.query(query, params);
+        const [rows] = await db(req).query(query, params);
         return send.ok(res, { routes: rows });
       } catch (e) {
         console.error(e);
@@ -253,7 +255,7 @@ export function makeServiceController(pool) {
       } = req.body;
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "INSERT INTO routes (service_type_id, source, destination, adult_price, student_price, child_price, infant_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
           [
             service_type_id,
@@ -266,7 +268,7 @@ export function makeServiceController(pool) {
           ]
         );
 
-        const [newRoute] = await pool.query(
+        const [newRoute] = await db(req).query(
           `
           SELECT r.*, st.name as service_type_name, st.vat_rate 
           FROM routes r 
@@ -297,7 +299,7 @@ export function makeServiceController(pool) {
         req.body;
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           "UPDATE routes SET source = ?, destination = ?, adult_price = ?, student_price = ?, child_price = ?, infant_price = ? WHERE id = ?",
           [source, destination, adult_price, student_price, child_price, infant_price, id]
         );
@@ -306,7 +308,7 @@ export function makeServiceController(pool) {
           return send.notFound(res, "Route not found");
         }
 
-        const [updated] = await pool.query(
+        const [updated] = await db(req).query(
           `
           SELECT r.*, st.name as service_type_name, st.vat_rate 
           FROM routes r 
@@ -339,7 +341,7 @@ export function makeServiceController(pool) {
       } = req.body;
 
       try {
-        const [result] = await pool.query(
+        const [result] = await db(req).query(
           `UPDATE routes SET 
            discount_enabled = ?, 
            discount_adult_price = ?, 
@@ -361,7 +363,7 @@ export function makeServiceController(pool) {
           return send.notFound(res, "Route not found");
         }
 
-        const [updated] = await pool.query(
+        const [updated] = await db(req).query(
           `
           SELECT r.*, st.name as service_type_name, st.vat_rate 
           FROM routes r 
@@ -387,7 +389,7 @@ export function makeServiceController(pool) {
       const { id } = req.params;
 
       try {
-        const [result] = await pool.query("DELETE FROM routes WHERE id = ?", [id]);
+        const [result] = await db(req).query("DELETE FROM routes WHERE id = ?", [id]);
 
         if (result.affectedRows === 0) {
           return send.notFound(res, "Route not found");

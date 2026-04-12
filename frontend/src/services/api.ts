@@ -167,6 +167,14 @@ export const License = {
   deactivateUser: (id) => api.put(`/users/${id}/deactivate`),
 };
 
+export const Instances = {
+  getAll: () => api.get("/instances"),
+  getActive: () => api.get("/instances/active"),
+  create: (data) => api.post("/instances", data),
+  switchTo: (name) => api.post(`/instances/${name}/switch`),
+  delete: (name) => api.delete(`/instances/${name}`),
+};
+
 export const Audit = {
   list: (params) => {
     const qs = new URLSearchParams();

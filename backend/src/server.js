@@ -1,7 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { getPool } from "./config/db.js";
+import poolManager from "./config/db.js";
+import { instanceMiddleware } from "./middleware/instance.js";
 import { makeAdminController } from "./controllers/adminController.js";
 import { makeServiceController } from "./controllers/serviceController.js";
 import { makeBookingController } from "./controllers/bookingController.js";
@@ -9,6 +10,7 @@ import { makeScanController } from "./controllers/scanController.js";
 import { makeSettingsController } from "./controllers/settingsController.js";
 import { makeTicketLayoutController } from "./controllers/ticketLayoutController.js";
 import { makePaymentMethodController } from "./controllers/paymentMethodController.js";
+import { makeInstanceController } from "./controllers/instanceController.js";
 import { makeAuthRouter } from "./routes/auth.js";
 import { makeServiceRouter } from "./routes/services.js";
 import { makeBookingRouter } from "./routes/bookings.js";
@@ -16,6 +18,7 @@ import { makeScanRouter } from "./routes/scans.js";
 import { makeSettingsRouter } from "./routes/settings.js";
 import { makeLayoutRouter } from "./routes/layouts.js";
 import { makePaymentMethodRouter } from "./routes/paymentMethods.js";
+import { makeInstanceRouter } from "./routes/instances.js";
 
 const app = express();
 
@@ -64,80 +67,85 @@ if (process.env.NODE_ENV === "development") {
   });
 }
 
-let pool;
-let adminController;
-let serviceController;
-let bookingController;
-let scanController;
-let settingsController;
-let ticketLayoutController;
-let paymentMethodController;
+let pool; // shared pool (users, settings, teams, audit_logs)
 
 try {
-  pool = await getPool();
-  console.log("Database connection established");
+  pool = await poolManager.getSharedPool();
+  console.log("Shared database connection established");
 
-  // Runtime migration: ensure payment_methods table + bookings.payment_method column exist
+  // Ensure shared-DB tables exist (users, teams, etc. are created by schema.sql,
+  // but role_permissions + system_settings may need runtime creation)
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS payment_methods (
+      CREATE TABLE IF NOT EXISTS role_permissions (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        code VARCHAR(50) NOT NULL UNIQUE,
-        name VARCHAR(100) NOT NULL,
-        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-        sort_order INT NOT NULL DEFAULT 0,
+        role_name VARCHAR(50) NOT NULL,
+        permission VARCHAR(100) NOT NULL,
+        granted BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_payment_methods_active (is_active),
-        INDEX idx_payment_methods_sort (sort_order)
+        UNIQUE KEY unique_role_perm (role_name, permission),
+        INDEX idx_role_permissions_role (role_name)
       )
     `);
-    // Seed default payment methods (only inserts missing rows thanks to UNIQUE on code)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
     await pool.query(
-      `INSERT IGNORE INTO payment_methods (code, name, sort_order) VALUES
-        ('cash', 'Cash', 1),
-        ('m-paisa', 'M-PAiSA', 2),
-        ('my-cash', 'MyCash', 3),
-        ('card', 'Card', 4)`
+      `INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('ticket_validity_days', '7')`
     );
-    // Add bookings.payment_method column if missing
-    const [colRows] = await pool.query(
-      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'payment_method'`
-    );
-    if (colRows[0].c === 0) {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN payment_method VARCHAR(50) NULL AFTER notes`);
-      await pool.query(`ALTER TABLE bookings ADD INDEX idx_bookings_payment_method (payment_method)`);
-    }
-    console.log("Payment methods migration OK");
-  } catch (migErr) {
-    console.error("Payment methods migration failed:", migErr.message);
+  } catch (e) {
+    console.error("Shared table migration error:", e.message);
   }
 
-  adminController = makeAdminController(pool);
-  serviceController = makeServiceController(pool);
-  bookingController = makeBookingController(pool);
-  scanController = makeScanController(pool);
-  settingsController = makeSettingsController(pool);
-  ticketLayoutController = makeTicketLayoutController(pool);
-  paymentMethodController = makePaymentMethodController(pool);
+  // Ensure the active instance DB has its tables (runs instance schema)
+  try {
+    const activePool = await poolManager.getActiveInstancePool();
+    console.log(`Active instance pool ready: ${await poolManager.getActiveInstanceName()}`);
+  } catch (e) {
+    console.error("Instance pool init error:", e.message);
+  }
 
-  console.log("Controllers initialized");
+  console.log("Database initialization complete");
 } catch (error) {
-  console.error("Failed to initialize database or controllers:", error);
+  console.error("Failed to initialize database:", error);
   process.exit(1);
 }
 
+// Controllers that use the SHARED pool (users, settings, auth, license, audit)
+const adminController = makeAdminController(pool);
+const settingsController = makeSettingsController(pool);
+const instanceController = makeInstanceController(poolManager);
+
+// Controllers that use INSTANCE data are created with the shared pool,
+// but will read from req.instancePool at request time (set by middleware).
+// We pass the shared pool so they can still JOIN to users/teams when needed.
+const serviceController = makeServiceController(pool);
+const bookingController = makeBookingController(pool);
+const scanController = makeScanController(pool);
+const ticketLayoutController = makeTicketLayoutController(pool);
+const paymentMethodController = makePaymentMethodController(pool);
+
+// Instance middleware — attaches req.instancePool on every authed request
+const attachInstance = instanceMiddleware(poolManager);
+
+// Routes: auth + settings mount BEFORE instance middleware (no instance needed for login)
 app.use("/api", makeAuthRouter(adminController, pool));
-// Settings router must be mounted before routers that use global requireAuth
-// (service/booking/scan), otherwise their router.use(requireAuth) will block
-// /api/settings/public before it can reach this router.
 app.use("/api", makeSettingsRouter(settingsController, pool));
-app.use("/api", makeServiceRouter(serviceController));
-app.use("/api", makeBookingRouter(bookingController, pool));
-app.use("/api", makeScanRouter(scanController, pool));
-app.use("/api", makeLayoutRouter(ticketLayoutController));
-app.use("/api", makePaymentMethodRouter(paymentMethodController));
+
+// Instance management routes (super_admin only, uses shared pool directly)
+app.use("/api", makeInstanceRouter(instanceController));
+
+// All other routes get instance middleware so req.instancePool is available
+app.use("/api", attachInstance, makeServiceRouter(serviceController));
+app.use("/api", attachInstance, makeBookingRouter(bookingController, pool));
+app.use("/api", attachInstance, makeScanRouter(scanController, pool));
+app.use("/api", attachInstance, makeLayoutRouter(ticketLayoutController));
+app.use("/api", attachInstance, makePaymentMethodRouter(paymentMethodController));
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -159,22 +167,19 @@ app.get("/", (_req, res) => {
       services: "/api/service-types, /api/routes, /api/vessels",
       bookings: "/api/bookings, /api/bookings/reports",
       scanning: "/api/tickets/:id/verify, /api/tickets/:id/board",
-      scans: "/api/scans/history, /api/scans/stats",
+      instances: "/api/instances (super_admin only)",
     },
   });
 });
 
 app.use((error, _req, res, _next) => {
   console.error("Server error:", error);
-
   if (error.name === "ValidationError") {
     return res.status(400).json({ error: "Validation failed", details: error.message });
   }
-
   if (error.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({ error: "File too large" });
   }
-
   res.status(500).json({
     error: "Internal server error",
     message: process.env.NODE_ENV === "development" ? error.message : "Something went wrong",

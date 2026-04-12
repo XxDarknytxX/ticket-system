@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Auth, Permissions, Settings as SettingsApi } from "../services/api";
+import { Auth, Permissions, Settings as SettingsApi, Instances } from "../services/api";
 import {
   Home,
   Ticket,
@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Key,
   ShieldCheck,
+  Database,
 } from "lucide-react";
 
 /* ─── Brand Ship SVG ─── */
@@ -198,6 +199,7 @@ export default function AppShell() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+  const [activeInstance, setActiveInstance] = useState<any>(null);
   const profileRef = useRef<HTMLButtonElement>(null);
   const profileRef2 = useRef<HTMLButtonElement>(null);
   const profileRefMobile = useRef<HTMLButtonElement>(null);
@@ -213,6 +215,11 @@ export default function AppShell() {
           const permData = await Permissions.getMine();
           setUserPermissions(permData.permissions || {});
         } catch { /* permissions endpoint may not exist yet */ }
+        // Load active instance info
+        try {
+          const instData = await Instances.getActive();
+          setActiveInstance(instData.instance);
+        } catch { /* instances endpoint may not exist yet */ }
         // Load theme color from backend (use public endpoint so all roles get it)
         try {
           const settingsData = await SettingsApi.getPublicSettings();
@@ -576,6 +583,29 @@ export default function AppShell() {
               </>
             )}
           </div>
+
+          {/* ── Active Instance Badge (hidden for production) ── */}
+          {activeInstance && activeInstance.name !== "production" && (
+            <div className={isCollapsed ? "flex justify-center px-3 pb-1" : "px-4 pb-2"}>
+              {isCollapsed ? (
+                <div
+                  className="w-[40px] h-[24px] rounded-full flex items-center justify-center text-[8px] font-black uppercase text-white"
+                  style={{ backgroundColor: activeInstance.color || '#f59e0b' }}
+                  title={activeInstance.label}
+                >
+                  {(activeInstance.name || '?').slice(0, 3)}
+                </div>
+              ) : (
+                <div
+                  className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white text-center"
+                  style={{ backgroundColor: activeInstance.color || '#f59e0b' }}
+                >
+                  <Database className="w-3 h-3 flex-shrink-0" />
+                  <span className="uppercase tracking-wider">{activeInstance.label || activeInstance.name}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Search ── */}
           <div className={isCollapsed ? "flex justify-center py-1.5 px-3" : "px-4 pb-2"}>

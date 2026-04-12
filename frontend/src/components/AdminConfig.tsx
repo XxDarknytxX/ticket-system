@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Services, Settings, Permissions, PaymentMethods } from "../services/api";
+import { Services, Settings, Permissions, PaymentMethods, Instances } from "../services/api";
 
 const ALL_PERMISSIONS = [
   { key: "dashboard", label: "Dashboard", desc: "View dashboard and stats" },
@@ -221,6 +221,13 @@ export default function AdminConfig() {
 
   // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  // Database instances (super_admin only)
+  const [instances, setInstances] = useState<any[]>([]);
+  const [activeInstanceName, setActiveInstanceName] = useState("");
+  const [showInstanceModal, setShowInstanceModal] = useState(false);
+  const [instanceForm, setInstanceForm] = useState({ name: "", label: "", color: "#f59e0b" });
+  const [instanceSwitching, setInstanceSwitching] = useState(false);
+
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<any>(null);
   const [paymentMethodForm, setPaymentMethodForm] = useState({
@@ -323,6 +330,7 @@ export default function AdminConfig() {
   useEffect(() => {
     loadData();
     loadSettings();
+    if (currentUserRole === "super_admin") loadInstances();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -487,6 +495,58 @@ export default function AdminConfig() {
       } catch {}
     } catch (err) {
       console.error("Error loading settings:", err);
+    }
+  };
+
+  // ── Instance handlers ──
+  const loadInstances = async () => {
+    try {
+      const data = await Instances.getAll();
+      setInstances(data.instances || []);
+      setActiveInstanceName(data.activeInstance || "");
+    } catch {}
+  };
+
+  const handleCreateInstance = async () => {
+    if (!instanceForm.name.trim() || !instanceForm.label.trim()) {
+      showMessage("Instance name and label are required", true);
+      return;
+    }
+    try {
+      await Instances.create(instanceForm);
+      showMessage("Instance created successfully!");
+      setShowInstanceModal(false);
+      setInstanceForm({ name: "", label: "", color: "#f59e0b" });
+      loadInstances();
+    } catch (err: any) {
+      showMessage("Error: " + err.message, true);
+    }
+  };
+
+  const handleSwitchInstance = async (name: string) => {
+    if (!window.confirm(`Switch to instance "${name}"? All users will immediately see data from this instance.`)) return;
+    setInstanceSwitching(true);
+    try {
+      await Instances.switchTo(name);
+      showMessage(`Switched to instance: ${name}`);
+      loadInstances();
+      loadData(); // reload routes/vessels/service types for the new instance
+    } catch (err: any) {
+      showMessage("Error: " + err.message, true);
+    } finally {
+      setInstanceSwitching(false);
+    }
+  };
+
+  const handleDeleteInstance = async (name: string) => {
+    if (!window.confirm(`DELETE instance "${name}"? This will permanently destroy all booking data in this instance. This cannot be undone.`)) return;
+    if (!window.confirm(`Are you absolutely sure? Type the instance name to confirm would be ideal, but this is the final warning.`)) return;
+    try {
+      await Instances.delete(name);
+      showMessage("Instance deleted");
+      loadInstances();
+    } catch (err: any) {
+      showMessage("Error: " + err.message, true);
     }
   };
 
@@ -1004,6 +1064,11 @@ export default function AdminConfig() {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       </svg>
     ),
+    database: (cls = "w-4 h-4") => (
+      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    ),
     map: (cls = "w-4 h-4") => (
       <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -1106,6 +1171,7 @@ export default function AdminConfig() {
     { id: "routes", label: "Routes & Pricing", icon: icons.pin("w-4 h-4") },
     { id: "roles", label: "Roles & Permissions", icon: icons.shield("w-4 h-4") },
     { id: "settings", label: "Settings", icon: icons.sliders("w-4 h-4") },
+    ...(currentUserRole === "super_admin" ? [{ id: "instances", label: "Instances", icon: icons.database("w-4 h-4") }] : []),
   ];
 
   /* ================================================================
@@ -1802,7 +1868,172 @@ export default function AdminConfig() {
             )}
           </div>
         )}
+
+        {/* ===================== INSTANCES TAB (super_admin only) ===================== */}
+        {activeSection === "instances" && currentUserRole === "super_admin" && (
+          <div className="space-y-5">
+            {/* Current active instance banner */}
+            {instances.find((i) => i.name === activeInstanceName) && (() => {
+              const active = instances.find((i) => i.name === activeInstanceName);
+              return (
+                <div
+                  className="card p-5 border-l-4 flex items-center justify-between"
+                  style={{ borderLeftColor: active.color || '#10b981' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: active.color || '#10b981' }}>
+                      {icons.database("w-5 h-5 text-white")}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Currently Active</p>
+                      <p className="text-[16px] font-bold text-slate-900">{active.label}</p>
+                      <p className="text-[11px] font-mono text-slate-400">{active.db_name}</p>
+                    </div>
+                  </div>
+                  {instanceSwitching && (
+                    <div className="w-5 h-5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Instance cards grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {instances.map((inst) => {
+                const isActive = inst.name === activeInstanceName;
+                return (
+                  <div
+                    key={inst.id}
+                    className={`group card p-5 relative ${isActive ? "ring-2" : "hover:border-slate-300 hover:shadow-md"}`}
+                    style={isActive ? { ringColor: inst.color || '#10b981', borderColor: inst.color || '#10b981' } : {}}
+                  >
+                    {/* Status dot */}
+                    <div className="absolute top-4 right-4 flex items-center gap-2">
+                      {isActive && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: inst.color || '#10b981' }}>
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          Active
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: (inst.color || '#10b981') + '20' }}>
+                      {icons.database(`w-5 h-5`)}
+                    </div>
+                    <h3 className="text-[14px] font-bold text-slate-900 mb-0.5 pr-20">{inst.label}</h3>
+                    <p className="text-[11px] font-mono text-slate-400 mb-1">{inst.name}</p>
+                    <p className="text-[10px] text-slate-400 mb-3">Database: {inst.db_name}</p>
+
+                    <div className="flex items-center gap-2">
+                      {!isActive && (
+                        <button
+                          onClick={() => handleSwitchInstance(inst.name)}
+                          disabled={instanceSwitching}
+                          className="btn-primary text-[11px] px-3 py-1.5 disabled:opacity-50"
+                        >
+                          Switch to this
+                        </button>
+                      )}
+                      {!isActive && inst.db_name !== (instances.find((i) => i.name === 'production')?.db_name) && (
+                        <button
+                          onClick={() => handleDeleteInstance(inst.name)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete instance"
+                        >
+                          {icons.trash()}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add New Instance */}
+              <button
+                onClick={() => setShowInstanceModal(true)}
+                className="group border-2 border-dashed border-slate-300/60 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[180px] hover:border-violet-400/60 hover:bg-violet-50/20 transition-all duration-300"
+              >
+                <div className="w-12 h-12 rounded-full bg-white group-hover:bg-violet-100/80 flex items-center justify-center mb-3 transition-all duration-300">
+                  {icons.plus("w-6 h-6 text-slate-400 group-hover:text-violet-600 transition-colors duration-300")}
+                </div>
+                <span className="text-sm font-medium text-slate-500 group-hover:text-violet-700 transition-colors duration-300">Add Instance</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* ==================== INSTANCE MODAL ==================== */}
+      {showInstanceModal && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowInstanceModal(false)} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-scale-in">
+            <div className="sticky top-0 bg-white rounded-t-2xl px-6 py-4 border-b border-slate-100 flex items-center justify-between z-10">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center mr-3 flex-shrink-0 shadow-lg shadow-violet-500/20">
+                  {icons.database("w-5 h-5 text-white")}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Create New Instance</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">A separate database for testing or staging</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInstanceModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                {icons.x()}
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Instance Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={instanceForm.name}
+                  onChange={(e) => setInstanceForm({ ...instanceForm, name: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                  className="glass-input w-full font-mono"
+                  placeholder="e.g., test, staging"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Lowercase letters, numbers, dashes only. Used as the identifier.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Display Label <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={instanceForm.label}
+                  onChange={(e) => setInstanceForm({ ...instanceForm, label: e.target.value })}
+                  className="glass-input w-full"
+                  placeholder="e.g., Test Environment"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Badge Color</label>
+                <div className="flex items-center gap-2">
+                  {["#10b981", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899"].map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setInstanceForm({ ...instanceForm, color: c })}
+                      className={`w-8 h-8 rounded-lg transition-all ${instanceForm.color === c ? "ring-2 ring-offset-2 ring-violet-500 scale-110" : "hover:scale-105"}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p className="text-[12px] text-amber-800 font-medium">
+                  This will create a new MySQL database <span className="font-mono font-bold">booking_app_{instanceForm.name || '...'}</span> with empty routes, vessels, and bookings. Users and settings are shared across all instances.
+                </p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-white rounded-b-2xl px-6 py-4 border-t border-slate-100 flex justify-end gap-3 z-10">
+              <button onClick={() => setShowInstanceModal(false)} className="btn-secondary">Cancel</button>
+              <button onClick={handleCreateInstance} className="btn-primary">Create Instance</button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
 
       {/* ==================== SERVICE TYPE MODAL ==================== */}
       {showServiceTypeModal && createPortal(

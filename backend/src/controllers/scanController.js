@@ -9,13 +9,16 @@ const send = {
 };
 
 export function makeScanController(pool) {
+  const db = (req) => req.instancePool || pool;
+  const sharedDbName = process.env.DATABASE_NAME || "booking_app";
+
   return {
     // GET /api/tickets/:ticketId/verify
     verifyTicket: async (req, res) => {
       const { ticketId } = req.params;
 
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           `SELECT
             b.*,
             b.passenger_gender,
@@ -23,7 +26,7 @@ export function makeScanController(pool) {
             b.boarded_at,
             b.custom_validity_days,
             DATE_ADD(b.travel_date, INTERVAL COALESCE(b.custom_validity_days,
-              (SELECT setting_value FROM system_settings WHERE setting_key = 'ticket_validity_days')
+              (SELECT setting_value FROM \`${sharedDbName}\`.system_settings WHERE setting_key = 'ticket_validity_days')
             ) DAY) AS valid_until,
             c.name AS customer_name,
             c.email AS customer_email,
@@ -45,8 +48,8 @@ export function makeScanController(pool) {
           JOIN routes r ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          JOIN users u ON b.booked_by = u.id
-          LEFT JOIN users bu ON b.boarded_by = bu.id
+          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
           WHERE b.ticket_id = ?`,
           [ticketId]
         );
@@ -79,7 +82,7 @@ export function makeScanController(pool) {
 
       try {
         // Get current booking
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           `SELECT b.*, c.name AS customer_name
            FROM bookings b
            JOIN customers c ON b.customer_id = c.id
@@ -105,7 +108,7 @@ export function makeScanController(pool) {
         }
 
         // Log the scan
-        await pool.query(
+        await db(req).query(
           `INSERT INTO ticket_scans (booking_id, scanned_by, scan_result) VALUES (?, ?, ?)`,
           [booking.id, req.user.id, scanResult]
         );
@@ -118,12 +121,12 @@ export function makeScanController(pool) {
 
         // If already boarded or cancelled, return info but don't change status
         if (scanResult !== "valid") {
-          const [updated] = await pool.query(
+          const [updated] = await db(req).query(
             `SELECT b.*, b.boarded_at, c.name AS customer_name,
                     bu.email AS boarded_by_email
              FROM bookings b
              JOIN customers c ON b.customer_id = c.id
-             LEFT JOIN users bu ON b.boarded_by = bu.id
+             LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
              WHERE b.ticket_id = ?`,
             [ticketId]
           );
@@ -139,13 +142,13 @@ export function makeScanController(pool) {
         }
 
         // Board the passenger
-        await pool.query(
+        await db(req).query(
           `UPDATE bookings SET status = 'boarded', boarded_at = NOW(), boarded_by = ? WHERE ticket_id = ?`,
           [req.user.id, ticketId]
         );
 
         // Return updated ticket
-        const [updated] = await pool.query(
+        const [updated] = await db(req).query(
           `SELECT
             b.*,
             b.passenger_gender,
@@ -169,8 +172,8 @@ export function makeScanController(pool) {
           JOIN routes r ON b.route_id = r.id
           JOIN service_types st ON r.service_type_id = st.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          JOIN users u ON b.booked_by = u.id
-          LEFT JOIN users bu ON b.boarded_by = bu.id
+          JOIN \`${sharedDbName}\`.users u ON b.booked_by = u.id
+          LEFT JOIN \`${sharedDbName}\`.users bu ON b.boarded_by = bu.id
           WHERE b.ticket_id = ?`,
           [ticketId]
         );
@@ -189,7 +192,7 @@ export function makeScanController(pool) {
     // GET /api/scans/history
     getScanHistory: async (req, res) => {
       try {
-        const [rows] = await pool.query(
+        const [rows] = await db(req).query(
           `SELECT
             ts.*,
             b.ticket_id,
@@ -201,7 +204,7 @@ export function makeScanController(pool) {
           JOIN bookings b ON ts.booking_id = b.id
           JOIN customers c ON b.customer_id = c.id
           JOIN routes r ON b.route_id = r.id
-          JOIN users u ON ts.scanned_by = u.id
+          JOIN \`${sharedDbName}\`.users u ON ts.scanned_by = u.id
           ORDER BY ts.scanned_at DESC
           LIMIT 500`
         );
@@ -216,15 +219,15 @@ export function makeScanController(pool) {
     // GET /api/scans/stats
     getScanStats: async (_req, res) => {
       try {
-        const [totalScans] = await pool.query(
+        const [totalScans] = await db(req).query(
           `SELECT COUNT(*) AS total FROM ticket_scans WHERE DATE(scanned_at) = CURDATE()`
         );
 
-        const [boardedToday] = await pool.query(
+        const [boardedToday] = await db(req).query(
           `SELECT COUNT(*) AS total FROM bookings WHERE status = 'boarded' AND DATE(boarded_at) = CURDATE()`
         );
 
-        const [resultBreakdown] = await pool.query(
+        const [resultBreakdown] = await db(req).query(
           `SELECT scan_result, COUNT(*) AS count
            FROM ticket_scans
            WHERE DATE(scanned_at) = CURDATE()
