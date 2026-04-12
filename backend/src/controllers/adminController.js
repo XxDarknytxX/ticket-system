@@ -276,6 +276,40 @@ export function makeAdminController(pool) {
           [user.id]
         );
 
+        // If creating a super_admin, sync to shared table + all other instances
+        if (role === "super_admin") {
+          try {
+            const sharedDb = req.sharedPool || pool;
+            // Add to shared super_admins table
+            await sharedDb.query(
+              "INSERT IGNORE INTO super_admins (email, password_hash, first_name, last_name) VALUES (?, ?, ?, ?)",
+              [email, passwordHash, first_name || null, last_name || null]
+            );
+            // Copy to all other instance DBs
+            const [instances] = await sharedDb.query("SELECT db_name FROM database_instances");
+            const mysql = (await import("mysql2/promise")).default;
+            const baseConfig = {
+              host: process.env.DATABASE_HOST || "localhost",
+              port: Number(process.env.DATABASE_PORT || 3306),
+              user: process.env.DATABASE_USER,
+              password: process.env.DATABASE_PASSWORD,
+              waitForConnections: true, connectionLimit: 2, queueLimit: 0
+            };
+            for (const inst of instances) {
+              try {
+                const instPool = mysql.createPool({ ...baseConfig, database: inst.db_name });
+                await instPool.query(
+                  "INSERT IGNORE INTO users (email, first_name, last_name, password_hash, role, terminal_id) VALUES (?, ?, ?, ?, 'super_admin', ?)",
+                  [email, first_name || null, last_name || null, passwordHash, terminal_id || '01']
+                );
+                await instPool.end();
+              } catch {}
+            }
+          } catch (e) {
+            console.error("Super admin sync error:", e.message);
+          }
+        }
+
         await logAudit(db(req), req, { action: "user.create", targetType: "user", targetId: user.id, details: { email, role, terminal_id } });
         return send.created(res, { user: newUser[0] });
       } catch (e) {
