@@ -6,7 +6,8 @@ function getApiBaseUrl() {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     // Known frontend routes that are NOT instance names
     const frontendRoutes = ["dashboard", "booking", "tickets", "reports", "scanner", "scan-history",
-      "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify"];
+      "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify",
+      "2fa-setup", "2fa-verify"];
     if (pathParts.length > 0 && !frontendRoutes.includes(pathParts[0])) {
       // First path segment is an instance name — prefix the API URL
       const instancePrefix = `/${pathParts[0]}`;

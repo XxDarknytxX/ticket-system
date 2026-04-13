@@ -60,7 +60,7 @@ function generateShades(hex: string): Record<string, string> {
 // Instance-scoped localStorage key prefix
 const _inst = (() => {
   const p = window.location.pathname.split("/").filter(Boolean);
-  const routes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify"];
+  const routes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify","2fa-setup","2fa-verify"];
   return (p.length > 0 && !routes.includes(p[0])) ? p[0] + "_" : "";
 })();
 

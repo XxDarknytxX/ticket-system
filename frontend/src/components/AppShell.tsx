@@ -207,7 +207,8 @@ export default function AppShell() {
   const instanceFromPath = (() => {
     const parts = location.pathname.split("/").filter(Boolean);
     const frontendRoutes = ["dashboard", "booking", "tickets", "reports", "scanner", "scan-history",
-      "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify"];
+      "configuration", "users", "teams", "license", "audit-logs", "login", "reset-password", "verify",
+      "2fa-setup", "2fa-verify"];
     if (parts.length > 0 && !frontendRoutes.includes(parts[0])) return parts[0];
     return null;
   })();
