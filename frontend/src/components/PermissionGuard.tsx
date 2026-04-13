@@ -74,9 +74,8 @@ export default function PermissionGuard({ permission, children }: { permission: 
       })
       .catch(() => {
         if (cancelled) return;
-        // API failed — deny access
-        setRedirectTo("/login");
-        setStatus("denied");
+        // API failed but token exists — allow access rather than flashing login
+        setStatus("allowed");
       });
 
     return () => { cancelled = true; };
