@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { validationResult } from "express-validator";
-import { authenticator } from "otplib";
+import { generateSecret as otpGenerateSecret, generateURI as otpGenerateURI, verify as otpVerify } from "otplib";
 import { sendEmail, generateResetToken, storeResetToken, validateResetToken, onboardingEmail, resetPasswordEmail, getAccentColor } from "../utils/mailer.js";
 import { logAudit, logAnonAudit } from "../utils/audit.js";
 
@@ -963,9 +963,9 @@ export function makeAdminController(pool) {
     setup2FA: async (req, res) => {
       try {
         // authenticator imported at top of file
-        const secret = authenticator.generateSecret();
+        const secret = otpGenerateSecret();
         const appName = "Goundar Shipping";
-        const otpauthUri = authenticator.keyuri(req.user.email, appName, secret);
+        const otpauthUri = otpGenerateURI({ secret, issuer: appName, label: req.user.email });
 
         // Store secret temporarily (not enabled until verified)
         if (req.user.isSuperAdmin || req.user.role === "super_admin") {
@@ -1001,7 +1001,7 @@ export function makeAdminController(pool) {
 
         if (!secret) return send.bad(res, "2FA setup not initiated. Call /2fa/setup first.");
 
-        const isValid = authenticator.verify({ token: String(code), secret });
+        const isValid = otpVerify({ token: String(code), secret });
         if (!isValid) return send.bad(res, "Invalid verification code. Please try again.");
 
         // Generate backup codes (10 random 8-char alphanumeric codes)
@@ -1067,7 +1067,7 @@ export function makeAdminController(pool) {
         if (!secret) return send.bad(res, "2FA not configured for this account");
 
         // Try TOTP code first
-        let valid = authenticator.verify({ token: String(code), secret });
+        let valid = otpVerify({ token: String(code), secret });
 
         // If TOTP fails, try backup codes
         if (!valid && backupCodes) {
@@ -1126,7 +1126,7 @@ export function makeAdminController(pool) {
         }
 
         if (!secret) return send.bad(res, "2FA is not enabled");
-        if (!authenticator.verify({ token: String(code), secret })) return send.bad(res, "Invalid code");
+        if (!otpVerify({ token: String(code), secret })) return send.bad(res, "Invalid code");
 
         await db(req).query("UPDATE users SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?", [req.user.id]);
 
