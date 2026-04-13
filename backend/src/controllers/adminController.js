@@ -1001,7 +1001,7 @@ export function makeAdminController(pool) {
 
         if (!secret) return send.bad(res, "2FA setup not initiated. Call /2fa/setup first.");
 
-        const isValid = otpVerify({ token: String(code), secret });
+        const isValid = (await otpVerify({ token: String(code), secret })).valid;
         if (!isValid) return send.bad(res, "Invalid verification code. Please try again.");
 
         // Generate backup codes (10 random 8-char alphanumeric codes)
@@ -1067,7 +1067,7 @@ export function makeAdminController(pool) {
         if (!secret) return send.bad(res, "2FA not configured for this account");
 
         // Try TOTP code first
-        let valid = otpVerify({ token: String(code), secret });
+        let valid = (await otpVerify({ token: String(code), secret })).valid;
 
         // If TOTP fails, try backup codes
         if (!valid && backupCodes) {
@@ -1126,7 +1126,7 @@ export function makeAdminController(pool) {
         }
 
         if (!secret) return send.bad(res, "2FA is not enabled");
-        if (!otpVerify({ token: String(code), secret })) return send.bad(res, "Invalid code");
+        if (!(await otpVerify({ token: String(code), secret })).valid) return send.bad(res, "Invalid code");
 
         await db(req).query("UPDATE users SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?", [req.user.id]);
 

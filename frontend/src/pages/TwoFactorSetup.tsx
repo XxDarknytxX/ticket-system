@@ -89,7 +89,7 @@ export default function TwoFactorSetup() {
             <div className="space-y-5">
               <div className="flex justify-center">
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                  <QRCodeSVG value={otpauthUri} size={200} level="M" />
+                  <QRCodeSVG value={otpauthUri} size={250} level="L" includeMargin={true} />
                 </div>
               </div>
 
