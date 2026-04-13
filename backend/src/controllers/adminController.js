@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { validationResult } from "express-validator";
+import { authenticator } from "otplib";
 import { sendEmail, generateResetToken, storeResetToken, validateResetToken, onboardingEmail, resetPasswordEmail, getAccentColor } from "../utils/mailer.js";
 import { logAudit, logAnonAudit } from "../utils/audit.js";
 
@@ -960,7 +962,7 @@ export function makeAdminController(pool) {
     // POST /api/2fa/setup — generate TOTP secret + QR code URI
     setup2FA: async (req, res) => {
       try {
-        const { authenticator } = await import("otplib");
+        // authenticator imported at top of file
         const secret = authenticator.generateSecret();
         const appName = "Goundar Shipping";
         const otpauthUri = authenticator.keyuri(req.user.email, appName, secret);
@@ -984,7 +986,7 @@ export function makeAdminController(pool) {
       const { code } = req.body;
       if (!code) return send.bad(res, "Verification code is required");
       try {
-        const { authenticator } = await import("otplib");
+        // authenticator imported at top of file
 
         // Get the user's stored secret
         let secret;
@@ -1003,7 +1005,7 @@ export function makeAdminController(pool) {
         if (!isValid) return send.bad(res, "Invalid verification code. Please try again.");
 
         // Generate backup codes (10 random 8-char alphanumeric codes)
-        const crypto = await import("crypto");
+        // crypto imported at top of file
         const backupCodes = [];
         const backupHashes = [];
         for (let i = 0; i < 10; i++) {
@@ -1046,7 +1048,7 @@ export function makeAdminController(pool) {
         const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
         if (!decoded.pending2FA) return send.bad(res, "Invalid token");
 
-        const { authenticator } = await import("otplib");
+        // authenticator imported at top of file
 
         // Get TOTP secret
         let secret;
@@ -1111,7 +1113,7 @@ export function makeAdminController(pool) {
       const { code } = req.body;
       if (!code) return send.bad(res, "Current 2FA code is required to disable");
       try {
-        const { authenticator } = await import("otplib");
+        // authenticator imported at top of file
 
         let secret;
         if (req.user.isSuperAdmin || req.user.role === "super_admin") {
