@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { validationResult } from "express-validator";
 import speakeasy from "speakeasy";
+import QRCode from "qrcode";
 import { sendEmail, generateResetToken, storeResetToken, validateResetToken, onboardingEmail, resetPasswordEmail, getAccentColor } from "../utils/mailer.js";
 import { logAudit, logAnonAudit } from "../utils/audit.js";
 
@@ -959,12 +960,29 @@ export function makeAdminController(pool) {
 
     // ===== TWO-FACTOR AUTHENTICATION =====
 
-    // POST /api/2fa/setup — generate TOTP secret + QR code URI
+    // POST /api/2fa/setup — generate TOTP secret + server-side QR code data URL
     setup2FA: async (req, res) => {
       try {
-        const generated = speakeasy.generateSecret({ name: `Goundar Shipping:${req.user.email}`, issuer: "Goundar Shipping" });
+        const username = (req.user.email || "user").substring(0, 30);
+        const issuer = "Goundar Shipping";
+
+        const generated = speakeasy.generateSecret({
+          name: username,
+          issuer,
+          length: 20,
+          encoding: "base32",
+        });
         const secret = generated.base32;
-        const otpauthUri = generated.otpauth_url;
+        const otpauthUrl = generated.otpauth_url;
+
+        // Generate QR code as data URL server-side (more reliable than frontend rendering)
+        const qrCode = await QRCode.toDataURL(otpauthUrl, {
+          errorCorrectionLevel: "L",
+          type: "image/png",
+          quality: 0.92,
+          margin: 1,
+          width: 256,
+        });
 
         // Store secret temporarily (not enabled until verified)
         if (req.user.isSuperAdmin || req.user.role === "super_admin") {
@@ -973,7 +991,7 @@ export function makeAdminController(pool) {
         }
         await db(req).query("UPDATE users SET totp_secret = ? WHERE id = ?", [secret, req.user.id]);
 
-        return send.ok(res, { secret, otpauthUri });
+        return send.ok(res, { secret, qrCode, manualEntryKey: secret });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
