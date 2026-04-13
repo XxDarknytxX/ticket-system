@@ -289,8 +289,8 @@ export default function AppShell() {
     ? `${me.first_name[0]}${(me.last_name || '')[0] || ''}`.toUpperCase()
     : displayName.charAt(0).toUpperCase();
 
-  const sidebarW = isCollapsed ? "lg:w-[68px]" : "lg:w-[272px]";
-  const contentPl = isCollapsed ? "lg:pl-[68px]" : "lg:pl-[272px]";
+  const sidebarW = isCollapsed ? "lg:w-[60px] xl:w-[68px]" : "lg:w-[220px] xl:w-[260px]";
+  const contentPl = isCollapsed ? "lg:pl-[60px] xl:pl-[68px]" : "lg:pl-[220px] xl:pl-[260px]";
 
   // Dock role gets a minimal, fullscreen app-like layout (no sidebar, no drawers)
   const isDock = me?.role === "dock";
