@@ -25,18 +25,20 @@ function getApiBaseUrl() {
 const API_BASE_URL = getApiBaseUrl();
 
 class ApiClient {
-  constructor(baseURL) {
+  baseURL: string;
+
+  constructor(baseURL: string) {
     this.baseURL = baseURL;
   }
 
-  getAuthHeader() {
+  getAuthHeader(): Record<string, string> {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async request(method, endpoint, data = null) {
+  async request(method: string, endpoint: string, data: any = null) {
     const url = `${this.baseURL}${endpoint}`;
-    const config = {
+    const config: any = {
       method,
       headers: {
         "Content-Type": "application/json",
@@ -58,19 +60,19 @@ class ApiClient {
     return result;
   }
 
-  get(endpoint) {
+  get(endpoint: string) {
     return this.request("GET", endpoint);
   }
 
-  post(endpoint, data) {
+  post(endpoint: string, data?: any) {
     return this.request("POST", endpoint, data);
   }
 
-  put(endpoint, data) {
+  put(endpoint: string, data?: any) {
     return this.request("PUT", endpoint, data);
   }
 
-  delete(endpoint) {
+  delete(endpoint: string) {
     return this.request("DELETE", endpoint);
   }
 }
@@ -115,7 +117,7 @@ export const Services = {
   deleteVessel: (id) => api.delete(`/vessels/${id}`),
 
   // Routes
-  getRoutes: (serviceTypeId) => {
+  getRoutes: (serviceTypeId?: any) => {
     const endpoint = serviceTypeId ? `/routes?service_type_id=${serviceTypeId}` : "/routes";
     return api.get(endpoint);
   },
@@ -133,11 +135,11 @@ export const Bookings = {
   searchBookings: (params) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== "" && v != null) query.append(k, v);
+      if (v !== "" && v != null) query.append(k, v as string);
     });
     return api.get(`/bookings/search?${query.toString()}`);
   },
-  getSalesReport: (period, teamId, dateFrom?, dateTo?, paymentMethod?, agentId?) => {
+  getSalesReport: (period?: any, teamId?: any, dateFrom?: any, dateTo?: any, paymentMethod?: any, agentId?: any) => {
     const params = new URLSearchParams();
     params.append("period", period || "all");
     if (teamId !== null && teamId !== undefined) params.append("team_id", teamId);
@@ -149,7 +151,7 @@ export const Bookings = {
   },
   getValidationReport: () => api.get("/bookings/validation-report"),
   createBooking: (booking) => api.post("/bookings", booking),
-  emailTickets: (ticket_ids, email) => api.post("/bookings/email-tickets", { ticket_ids, email }),
+  emailTickets: (ticket_ids: any, email?: any) => api.post("/bookings/email-tickets", { ticket_ids, email }),
   updateBookingStatus: (ticketId, status) => api.put(`/bookings/${ticketId}/status`, { status }),
   getReports: () => api.get("/bookings/reports"),
 };
@@ -212,7 +214,7 @@ export const Audit = {
     const qs = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== "") qs.append(k, v);
+        if (v !== undefined && v !== null && v !== "") qs.append(k, v as string);
       });
     }
     const q = qs.toString();

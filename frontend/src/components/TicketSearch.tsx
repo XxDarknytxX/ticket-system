@@ -130,7 +130,7 @@ export default function TicketSearch() {
     setError("");
 
     try {
-      const params = {
+      const params: any = {
         page,
         limit: 20
       };

@@ -512,7 +512,7 @@ export default function AgentBooking() {
               travel_date: leg.travelDate,
               notes: notes || undefined,
               payment_method: selectedPaymentMethod || undefined,
-            };
+            } as any;
             if (customValidityDays) {
               payload.custom_validity_days = parseInt(customValidityDays, 10);
             }
@@ -532,7 +532,7 @@ export default function AgentBooking() {
             passenger_type: passenger.passengerType,
             notes: notes || undefined,
             payment_method: selectedPaymentMethod || undefined,
-          };
+          } as any;
           if (customValidityDays) {
             basePayload.custom_validity_days = parseInt(customValidityDays, 10);
           }
@@ -690,7 +690,7 @@ export default function AgentBooking() {
   );
 
   /* ═══════════════════════ SEARCHABLE ROUTE SELECT ═══════════════════════ */
-  const SearchableRouteSelect = ({ value, onChange, disabled, placeholder, compact }) => {
+  const SearchableRouteSelect = ({ value, onChange, disabled, placeholder, compact }: any) => {
     const [query, setQuery] = useState("");
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef(null);
