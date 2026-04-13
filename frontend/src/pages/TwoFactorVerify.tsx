@@ -10,11 +10,14 @@ export default function TwoFactorVerify() {
   const [showBackupInput, setShowBackupInput] = useState(false);
   const [backupCode, setBackupCode] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const verifiedRef = useRef(false);
   const navigate = useNavigate();
 
   const tempToken = localStorage.getItem("tempToken") || "";
 
   useEffect(() => {
+    // Don't redirect to login if we just verified successfully
+    if (verifiedRef.current) return;
     if (!tempToken) { navigate("/login"); return; }
     setTimeout(() => inputRefs.current[0]?.focus(), 100);
   }, [tempToken, navigate]);
@@ -52,17 +55,18 @@ export default function TwoFactorVerify() {
     setError("");
     try {
       const data = await TwoFactor.verifyLogin(tempToken, codeStr);
+      verifiedRef.current = true;
       localStorage.removeItem("tempToken");
       localStorage.removeItem("pendingRole");
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.role);
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true });
     } catch (e: any) {
       setError(e.message);
       setCode(["", "", "", "", "", ""]);
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } finally {
-      setLoading(false);
+      if (!verifiedRef.current) setLoading(false);
     }
   };
 
@@ -74,20 +78,21 @@ export default function TwoFactorVerify() {
     setError("");
     try {
       const data = await TwoFactor.verifyLogin(tempToken, cleaned);
+      verifiedRef.current = true;
       localStorage.removeItem("tempToken");
       localStorage.removeItem("pendingRole");
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.role);
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true });
     } catch (e: any) {
       setError(e.message);
       setBackupCode("");
     } finally {
-      setLoading(false);
+      if (!verifiedRef.current) setLoading(false);
     }
   };
 
-  if (!tempToken) return null;
+  if (!tempToken && !verifiedRef.current) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

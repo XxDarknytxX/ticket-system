@@ -38,6 +38,12 @@ export default function Login() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const navigate = useNavigate();
 
+  // If already authenticated, redirect to dashboard
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) navigate("/", { replace: true });
+  }, [navigate]);
+
   // Fetch server-side theme color so login page matches the admin's selected theme
   // even on fresh browsers (before any login has happened).
   useEffect(() => {
