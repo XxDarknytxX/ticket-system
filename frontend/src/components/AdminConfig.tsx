@@ -1251,6 +1251,16 @@ export default function AdminConfig() {
 
         {/* ===================== VESSELS TAB ===================== */}
         {activeSection === "vessels" && (
+          <div className="space-y-3">
+          <div className="flex justify-end">
+            <button
+              onClick={() => openVesselModal()}
+              className="btn-primary flex items-center gap-2 text-[13px]"
+            >
+              {icons.plus("w-4 h-4")}
+              Add Vessel
+            </button>
+          </div>
           <div className="glass-card overflow-hidden">
             <div className="divide-y divide-slate-100/80">
               {vessels.map((vessel) => {
@@ -1302,14 +1312,6 @@ export default function AdminConfig() {
             </div>
 
           </div>
-          <div className="mt-3">
-            <button
-              onClick={() => openVesselModal()}
-              className="btn-primary flex items-center gap-2 text-[13px]"
-            >
-              {icons.plus("w-4 h-4")}
-              Add Vessel
-            </button>
           </div>
         )}
 
