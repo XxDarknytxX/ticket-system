@@ -1301,18 +1301,15 @@ export default function AdminConfig() {
               })}
             </div>
 
-            {/* Add New Vessel — inline row */}
-            <div className="border-t border-dashed border-slate-200">
-              <button
-                onClick={() => openVesselModal()}
-                className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-violet-700 hover:bg-violet-50/30 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
-                  {icons.plus("w-5 h-5 text-slate-400")}
-                </div>
-                <span className="text-[13px] font-medium">Add Vessel</span>
-              </button>
-            </div>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={() => openVesselModal()}
+              className="btn-primary flex items-center gap-2 text-[13px]"
+            >
+              {icons.plus("w-4 h-4")}
+              Add Vessel
+            </button>
           </div>
         )}
 
