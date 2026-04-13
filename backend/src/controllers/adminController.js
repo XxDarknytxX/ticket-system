@@ -963,11 +963,11 @@ export function makeAdminController(pool) {
     // POST /api/2fa/setup — generate TOTP secret + server-side QR code data URL
     setup2FA: async (req, res) => {
       try {
-        const username = (req.user.email || "user").substring(0, 30);
         const issuer = "Goundar Shipping";
+        const accountLabel = `${issuer}:${req.user.email}`;
 
         const generated = speakeasy.generateSecret({
-          name: username,
+          name: accountLabel,
           issuer,
           length: 20,
           encoding: "base32",
