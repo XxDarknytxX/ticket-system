@@ -18,7 +18,7 @@ const send = {
 /** Thin data-access helpers */
 async function findUserByEmail(pool, email) {
   const [rows] = await pool.query(
-    "SELECT id, email, first_name, last_name, password_hash, role, terminal_id, team_id, is_active FROM users WHERE email = ?",
+    "SELECT id, email, first_name, last_name, password_hash, role, terminal_id, team_id, is_active, totp_secret, totp_enabled, totp_backup_codes FROM users WHERE email = ?",
     [email]
   );
   return rows[0] || null;
@@ -62,12 +62,14 @@ async function syncSuperAdmin(sharedPool, email, updates) {
     if (updates.password_hash) { setClauses.push("password_hash = ?"); values.push(updates.password_hash); }
     if (updates.first_name !== undefined) { setClauses.push("first_name = ?"); values.push(updates.first_name); }
     if (updates.last_name !== undefined) { setClauses.push("last_name = ?"); values.push(updates.last_name); }
+    if (updates.totp_secret !== undefined) { setClauses.push("totp_secret = ?"); values.push(updates.totp_secret); }
+    if (updates.totp_enabled !== undefined) { setClauses.push("totp_enabled = ?"); values.push(updates.totp_enabled ? 1 : 0); }
+    if (updates.totp_backup_codes !== undefined) { setClauses.push("totp_backup_codes = ?"); values.push(JSON.stringify(updates.totp_backup_codes)); }
     if (setClauses.length === 0) return;
 
     values.push(email);
     await sharedPool.query(`UPDATE super_admins SET ${setClauses.join(", ")} WHERE email = ?`, values);
 
-    // Sync to all instance users tables
     const [instances] = await sharedPool.query("SELECT db_name FROM database_instances");
     const mysql = (await import("mysql2/promise")).default;
     const base = {
@@ -86,6 +88,9 @@ async function syncSuperAdmin(sharedPool, email, updates) {
         if (updates.password_hash) { setClausesInst.push("password_hash = ?"); valuesInst.push(updates.password_hash); }
         if (updates.first_name !== undefined) { setClausesInst.push("first_name = ?"); valuesInst.push(updates.first_name); }
         if (updates.last_name !== undefined) { setClausesInst.push("last_name = ?"); valuesInst.push(updates.last_name); }
+        if (updates.totp_secret !== undefined) { setClausesInst.push("totp_secret = ?"); valuesInst.push(updates.totp_secret); }
+        if (updates.totp_enabled !== undefined) { setClausesInst.push("totp_enabled = ?"); valuesInst.push(updates.totp_enabled ? 1 : 0); }
+        if (updates.totp_backup_codes !== undefined) { setClausesInst.push("totp_backup_codes = ?"); valuesInst.push(JSON.stringify(updates.totp_backup_codes)); }
         valuesInst.push(email);
         await instPool.query(`UPDATE users SET ${setClausesInst.join(", ")} WHERE email = ? AND role = 'super_admin'`, valuesInst);
         await instPool.end();
@@ -128,33 +133,38 @@ export function makeAdminController(pool) {
 
     // POST /api/login
     // Checks super_admins table (shared DB) first, then instance users table.
+    // Returns tempToken if 2FA is enabled, or requires2FASetup if not set up yet.
     login: async (req, res) => {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return send.bad(res, errors.array()[0].msg);
 
       const { email, password } = req.body;
       const instancePool = db(req);
-      const auditPool = instancePool; // audit logs go to the instance DB
+      const auditPool = instancePool;
 
       try {
         // 1. Check super_admins table in shared DB
         const sharedDb = req.sharedPool || pool;
         const [saRows] = await sharedDb.query(
-          "SELECT id, email, password_hash, first_name, last_name FROM super_admins WHERE email = ?",
+          "SELECT id, email, password_hash, first_name, last_name, totp_secret, totp_enabled FROM super_admins WHERE email = ?",
           [email]
         );
 
         if (saRows.length > 0) {
           const sa = saRows[0];
-          const ok = await bcrypt.compare(password, sa.password_hash);
-          if (ok) {
-            const token = jwt.sign(
-              { id: sa.id, email: sa.email, role: "super_admin", terminal_id: "01", team_id: null, isSuperAdmin: true },
-              process.env.JWT_SECRET,
-              { expiresIn: "8h" }
-            );
+          const pwOk = await bcrypt.compare(password, sa.password_hash);
+          if (pwOk) {
+            const jwtPayload = { id: sa.id, email: sa.email, role: "super_admin", terminal_id: "01", team_id: null, isSuperAdmin: true };
+
+            // 2FA check
+            if (sa.totp_enabled) {
+              const tempToken = jwt.sign({ ...jwtPayload, pending2FA: true }, process.env.JWT_SECRET, { expiresIn: "5m" });
+              return send.ok(res, { requires2FA: true, tempToken, role: "super_admin" });
+            }
+            // 2FA not set up — issue full token but flag for setup
+            const token = jwt.sign(jwtPayload, process.env.JWT_SECRET, { expiresIn: "8h" });
             try { await logAudit(auditPool, { user: { id: sa.id, email: sa.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "super_admin", targetId: sa.id }); } catch {}
-            return send.ok(res, { token, role: "super_admin" });
+            return send.ok(res, { token, role: "super_admin", requires2FASetup: true });
           }
         }
 
@@ -176,13 +186,18 @@ export function makeAdminController(pool) {
           return send.forbidden(res, "Account is deactivated. Contact your administrator.");
         }
 
-        const token = jwt.sign(
-          { id: user.id, email: user.email, role: user.role, terminal_id: user.terminal_id || '01', team_id: user.team_id || null },
-          process.env.JWT_SECRET,
-          { expiresIn: "2h" }
-        );
+        const jwtPayload = { id: user.id, email: user.email, role: user.role, terminal_id: user.terminal_id || '01', team_id: user.team_id || null };
+
+        // 2FA check
+        if (user.totp_enabled) {
+          const tempToken = jwt.sign({ ...jwtPayload, pending2FA: true }, process.env.JWT_SECRET, { expiresIn: "5m" });
+          return send.ok(res, { requires2FA: true, tempToken, role: user.role });
+        }
+
+        // 2FA not set up — issue full token but flag for setup
+        const token = jwt.sign(jwtPayload, process.env.JWT_SECRET, { expiresIn: "2h" });
         try { await logAudit(auditPool, { user: { id: user.id, email: user.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "user", targetId: user.id }); } catch {}
-        return send.ok(res, { token, role: user.role });
+        return send.ok(res, { token, role: user.role, requires2FASetup: !user.totp_enabled });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
@@ -937,6 +952,215 @@ export function makeAdminController(pool) {
         return send.ok(res, { message: "Password updated successfully" });
       } catch (e) {
         return send.bad(res, e.message);
+      }
+    },
+
+    // ===== TWO-FACTOR AUTHENTICATION =====
+
+    // POST /api/2fa/setup — generate TOTP secret + QR code URI
+    setup2FA: async (req, res) => {
+      try {
+        const { authenticator } = await import("otplib");
+        const secret = authenticator.generateSecret();
+        const appName = "Goundar Shipping";
+        const otpauthUri = authenticator.keyuri(req.user.email, appName, secret);
+
+        // Store secret temporarily (not enabled until verified)
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          await sharedDb.query("UPDATE super_admins SET totp_secret = ? WHERE email = ?", [secret, req.user.email]);
+        }
+        await db(req).query("UPDATE users SET totp_secret = ? WHERE id = ?", [secret, req.user.id]);
+
+        return send.ok(res, { secret, otpauthUri });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
+    // POST /api/2fa/verify — confirm setup with a code, enables 2FA + generates backup codes
+    verify2FA: async (req, res) => {
+      const { code } = req.body;
+      if (!code) return send.bad(res, "Verification code is required");
+      try {
+        const { authenticator } = await import("otplib");
+
+        // Get the user's stored secret
+        let secret;
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          const [rows] = await sharedDb.query("SELECT totp_secret FROM super_admins WHERE email = ?", [req.user.email]);
+          secret = rows[0]?.totp_secret;
+        } else {
+          const [rows] = await db(req).query("SELECT totp_secret FROM users WHERE id = ?", [req.user.id]);
+          secret = rows[0]?.totp_secret;
+        }
+
+        if (!secret) return send.bad(res, "2FA setup not initiated. Call /2fa/setup first.");
+
+        const isValid = authenticator.verify({ token: String(code), secret });
+        if (!isValid) return send.bad(res, "Invalid verification code. Please try again.");
+
+        // Generate backup codes (10 random 8-char alphanumeric codes)
+        const crypto = await import("crypto");
+        const backupCodes = [];
+        const backupHashes = [];
+        for (let i = 0; i < 10; i++) {
+          const raw = crypto.randomBytes(4).toString("hex"); // 8 chars
+          backupCodes.push(raw);
+          backupHashes.push(await bcrypt.hash(raw, 6)); // lighter hash for backup codes
+        }
+
+        // Enable 2FA
+        const backupJson = JSON.stringify(backupHashes);
+        await db(req).query(
+          "UPDATE users SET totp_enabled = TRUE, totp_backup_codes = ? WHERE id = ?",
+          [backupJson, req.user.id]
+        );
+
+        // Sync super_admin across instances
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          await syncSuperAdmin(sharedDb, req.user.email, {
+            totp_secret: secret,
+            totp_enabled: true,
+            totp_backup_codes: backupHashes,
+          });
+        }
+
+        await logAudit(db(req), req, { action: "2fa.enabled", targetType: "user", targetId: req.user.id });
+        return send.ok(res, { enabled: true, backupCodes });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
+    // POST /api/2fa/verify-login — verify TOTP code during login (uses tempToken)
+    verifyLogin2FA: async (req, res) => {
+      const { tempToken, code } = req.body;
+      if (!tempToken || !code) return send.bad(res, "Token and code are required");
+
+      try {
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+        if (!decoded.pending2FA) return send.bad(res, "Invalid token");
+
+        const { authenticator } = await import("otplib");
+
+        // Get TOTP secret
+        let secret;
+        let backupCodes;
+        if (decoded.isSuperAdmin) {
+          const sharedDb = req.sharedPool || pool;
+          const [rows] = await sharedDb.query("SELECT totp_secret, totp_backup_codes FROM super_admins WHERE email = ?", [decoded.email]);
+          secret = rows[0]?.totp_secret;
+          backupCodes = rows[0]?.totp_backup_codes;
+        } else {
+          const [rows] = await db(req).query("SELECT totp_secret, totp_backup_codes FROM users WHERE id = ?", [decoded.id]);
+          secret = rows[0]?.totp_secret;
+          backupCodes = rows[0]?.totp_backup_codes;
+        }
+
+        if (!secret) return send.bad(res, "2FA not configured for this account");
+
+        // Try TOTP code first
+        let valid = authenticator.verify({ token: String(code), secret });
+
+        // If TOTP fails, try backup codes
+        if (!valid && backupCodes) {
+          const codes = typeof backupCodes === "string" ? JSON.parse(backupCodes) : backupCodes;
+          for (let i = 0; i < codes.length; i++) {
+            if (await bcrypt.compare(String(code), codes[i])) {
+              valid = true;
+              // Consume the backup code
+              codes.splice(i, 1);
+              const updatedJson = JSON.stringify(codes);
+              if (decoded.isSuperAdmin) {
+                const sharedDb = req.sharedPool || pool;
+                await sharedDb.query("UPDATE super_admins SET totp_backup_codes = ? WHERE email = ?", [updatedJson, decoded.email]);
+                await syncSuperAdmin(sharedDb, decoded.email, { totp_backup_codes: codes });
+              } else {
+                await db(req).query("UPDATE users SET totp_backup_codes = ? WHERE id = ?", [updatedJson, decoded.id]);
+              }
+              break;
+            }
+          }
+        }
+
+        if (!valid) return send.bad(res, "Invalid verification code");
+
+        // Issue full JWT (remove pending2FA flag)
+        const { pending2FA, iat, exp, ...payload } = decoded;
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: decoded.isSuperAdmin ? "8h" : "2h" });
+
+        const auditPool = db(req);
+        try { await logAudit(auditPool, { user: { id: decoded.id, email: decoded.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login.2fa_verified", targetType: "user", targetId: decoded.id }); } catch {}
+
+        return send.ok(res, { token, role: decoded.role });
+      } catch (e) {
+        if (e.name === "TokenExpiredError") return send.bad(res, "2FA session expired. Please login again.");
+        if (e.name === "JsonWebTokenError") return send.bad(res, "Invalid session token");
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
+    // POST /api/2fa/disable — disable own 2FA (requires current TOTP code)
+    disable2FA: async (req, res) => {
+      const { code } = req.body;
+      if (!code) return send.bad(res, "Current 2FA code is required to disable");
+      try {
+        const { authenticator } = await import("otplib");
+
+        let secret;
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          const [rows] = await sharedDb.query("SELECT totp_secret FROM super_admins WHERE email = ?", [req.user.email]);
+          secret = rows[0]?.totp_secret;
+        } else {
+          const [rows] = await db(req).query("SELECT totp_secret FROM users WHERE id = ?", [req.user.id]);
+          secret = rows[0]?.totp_secret;
+        }
+
+        if (!secret) return send.bad(res, "2FA is not enabled");
+        if (!authenticator.verify({ token: String(code), secret })) return send.bad(res, "Invalid code");
+
+        await db(req).query("UPDATE users SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?", [req.user.id]);
+
+        if (req.user.isSuperAdmin || req.user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          await syncSuperAdmin(sharedDb, req.user.email, { totp_secret: null, totp_enabled: false, totp_backup_codes: null });
+        }
+
+        await logAudit(db(req), req, { action: "2fa.disabled", targetType: "user", targetId: req.user.id });
+        return send.ok(res, { disabled: true });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
+    // POST /api/users/:id/reset-2fa — admin/super_admin resets a user's 2FA
+    reset2FA: async (req, res) => {
+      if (req.user.role !== "admin" && req.user.role !== "super_admin") return send.forbidden(res);
+      const { id } = req.params;
+      try {
+        const user = await findUserById(db(req), id);
+        if (!user) return send.notFound(res, "User not found");
+
+        await db(req).query("UPDATE users SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?", [id]);
+
+        if (user.role === "super_admin") {
+          const sharedDb = req.sharedPool || pool;
+          await syncSuperAdmin(sharedDb, user.email, { totp_secret: null, totp_enabled: false, totp_backup_codes: null });
+        }
+
+        await logAudit(db(req), req, { action: "2fa.reset", targetType: "user", targetId: id, details: { email: user.email, resetBy: req.user.email } });
+        return send.ok(res, { reset: true });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
       }
     },
 

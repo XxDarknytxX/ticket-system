@@ -28,6 +28,9 @@ export function makeAuthRouter(controller, pool) {
   // Public: consume reset token
   router.post("/reset-password", controller.consumeResetToken);
 
+  // Public: verify 2FA during login (uses tempToken, no requireAuth)
+  router.post("/2fa/verify-login", controller.verifyLogin2FA);
+
   // Protected routes
   router.get("/me", requireAuth, controller.me);
   router.get("/dashboard", requireAuth, requirePermission(pool, "dashboard"), controller.dashboard);
@@ -79,6 +82,12 @@ export function makeAuthRouter(controller, pool) {
   router.put("/permissions", requireAuth, requireRole("super_admin"), controller.updatePermission);
   router.post("/roles", requireAuth, requireRole("super_admin"), controller.createRole);
   router.delete("/roles/:role_name", requireAuth, requireRole("super_admin"), controller.deleteRole);
+
+  // 2FA management (authenticated)
+  router.post("/2fa/setup", requireAuth, controller.setup2FA);
+  router.post("/2fa/verify", requireAuth, controller.verify2FA);
+  router.post("/2fa/disable", requireAuth, controller.disable2FA);
+  router.post("/users/:id/reset-2fa", requireAuth, requirePermission(pool, "users"), controller.reset2FA);
 
   // License management (super_admin only)
   router.get("/license", requireAuth, requireRole("super_admin", "admin"), controller.getLicenseInfo);

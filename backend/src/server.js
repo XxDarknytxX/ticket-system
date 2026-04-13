@@ -63,8 +63,38 @@ try {
 
   // Ensure production instance DB has all tables
   try {
-    await poolManager.getInstancePool("production");
+    const prodPool = await poolManager.getInstancePool("production");
     console.log("Production instance pool ready");
+
+    // Runtime migration: add totp columns if missing
+    try {
+      const [cols] = await prodPool.query(
+        "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'totp_secret'"
+      );
+      if (cols[0].c === 0) {
+        await prodPool.query("ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64) NULL AFTER created_by");
+        await prodPool.query("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT FALSE AFTER totp_secret");
+        await prodPool.query("ALTER TABLE users ADD COLUMN totp_backup_codes JSON NULL AFTER totp_enabled");
+        console.log("Added 2FA columns to users table");
+      }
+    } catch (migErr) {
+      console.error("2FA migration error:", migErr.message);
+    }
+
+    // Also add to shared super_admins if missing
+    try {
+      const [saCols] = await sharedPool.query(
+        "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'super_admins' AND COLUMN_NAME = 'totp_secret'"
+      );
+      if (saCols[0].c === 0) {
+        await sharedPool.query("ALTER TABLE super_admins ADD COLUMN totp_secret VARCHAR(64) NULL AFTER last_name");
+        await sharedPool.query("ALTER TABLE super_admins ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT FALSE AFTER totp_secret");
+        await sharedPool.query("ALTER TABLE super_admins ADD COLUMN totp_backup_codes JSON NULL AFTER totp_enabled");
+        console.log("Added 2FA columns to super_admins table");
+      }
+    } catch (migErr) {
+      console.error("Super admin 2FA migration error:", migErr.message);
+    }
   } catch (e) {
     console.error("Production instance init error:", e.message);
   }

@@ -40,6 +40,9 @@ const INSTANCE_SCHEMA = `
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     deactivated_at TIMESTAMP NULL,
     created_by INT NULL,
+    totp_secret VARCHAR(64) NULL,
+    totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    totp_backup_codes JSON NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_users_email (email),
@@ -244,6 +247,9 @@ class PoolManager {
         password_hash VARCHAR(255) NOT NULL,
         first_name VARCHAR(100) NULL,
         last_name VARCHAR(100) NULL,
+        totp_secret VARCHAR(64) NULL,
+        totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        totp_backup_codes JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )

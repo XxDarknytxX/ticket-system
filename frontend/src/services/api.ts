@@ -198,6 +198,14 @@ export const Instances = {
   delete: (name) => instanceApi.delete(`/instances/${name}`),
 };
 
+export const TwoFactor = {
+  setup: () => api.post("/2fa/setup", {}),
+  verify: (code) => api.post("/2fa/verify", { code }),
+  verifyLogin: (tempToken, code) => api.post("/2fa/verify-login", { tempToken, code }),
+  disable: (code) => api.post("/2fa/disable", { code }),
+  resetUser: (userId) => api.post(`/users/${userId}/reset-2fa`, {}),
+};
+
 export const Audit = {
   list: (params) => {
     const qs = new URLSearchParams();

@@ -14,6 +14,8 @@ import VerifyPage from "./pages/VerifyPage";
 import ScanHistoryPage from "./pages/ScanHistoryPage";
 import TicketsPage from "./pages/TicketsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import TwoFactorSetup from "./pages/TwoFactorSetup";
+import TwoFactorVerify from "./pages/TwoFactorVerify";
 import LicensePage from "./pages/LicensePage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import PermissionGuard, { getFirstPermittedRoute } from "./components/PermissionGuard";
@@ -96,6 +98,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/2fa-setup" element={<TwoFactorSetup />} />
+        <Route path="/2fa-verify" element={<TwoFactorVerify />} />
         <Route path="/" element={<RoleRedirect />} />
 
         {/* Main app shell (agent + admin) */}

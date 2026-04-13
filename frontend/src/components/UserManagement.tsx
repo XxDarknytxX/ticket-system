@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Auth, Permissions, License } from "../services/api";
+import { Auth, Permissions, License, TwoFactor } from "../services/api";
 
 /* ─── Password Generator ─── */
 function generatePassword(length = 12): string {
@@ -135,6 +135,23 @@ export default function UsersManagement() {
         try {
           await Auth.resetPassword(user.id);
           showMsg(`Password reset email sent to ${user.email}`);
+        } catch (error: any) { showMsg(`Error: ${error.message}`); }
+        finally { setActionLoading(null); }
+      },
+    });
+  };
+
+  const reset2FA = (user: any) => {
+    const name = user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email;
+    setConfirmModal({
+      title: "Reset 2FA",
+      message: `Reset two-factor authentication for ${name}? They will be required to set up 2FA again on next login.`,
+      action: async () => {
+        setActionLoading(`reset2fa-${user.id}`);
+        try {
+          await TwoFactor.resetUser(user.id);
+          showMsg(`2FA reset for ${name}. They must set up 2FA on next login.`);
+          loadUsers();
         } catch (error: any) { showMsg(`Error: ${error.message}`); }
         finally { setActionLoading(null); }
       },
@@ -346,6 +363,13 @@ export default function UsersManagement() {
                           <div className="w-4 h-4 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
                         ) : (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                        )}
+                      </button>
+                      <button onClick={() => reset2FA(user)} disabled={actionLoading === `reset2fa-${user.id}`} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50" title="Reset 2FA">
+                        {actionLoading === `reset2fa-${user.id}` ? (
+                          <div className="w-4 h-4 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                         )}
                       </button>
                       <button onClick={() => openUserModal(user)} className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors" title="Edit user">

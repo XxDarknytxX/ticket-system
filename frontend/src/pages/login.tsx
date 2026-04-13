@@ -62,11 +62,27 @@ export default function Login() {
     setErr("");
     setLoading(true);
     try {
-      const { token, role } = await Auth.login(email, password);
-      localStorage.setItem("token", token);
-      localStorage.setItem("role", role);
-      // Navigate to "/" which triggers RoleRedirect — it fetches permissions
-      // and sends the user to their first permitted page (no flash of unauthorized pages)
+      const data = await Auth.login(email, password);
+
+      if (data.requires2FA) {
+        // 2FA enabled — store temp token and redirect to verify page
+        localStorage.setItem("tempToken", data.tempToken);
+        localStorage.setItem("pendingRole", data.role);
+        navigate("/2fa-verify");
+        return;
+      }
+
+      // Login successful — store token
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.role);
+
+      if (data.requires2FASetup) {
+        // 2FA not set up yet — redirect to setup (mandatory)
+        navigate("/2fa-setup");
+        return;
+      }
+
+      // Normal flow
       navigate("/");
     } catch (e: any) {
       setErr(e.message);
