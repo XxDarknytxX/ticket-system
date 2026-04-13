@@ -66,16 +66,24 @@ try {
     const prodPool = await poolManager.getInstancePool("production");
     console.log("Production instance pool ready");
 
-    // Runtime migration: add totp columns if missing
+    // Runtime migration: add totp columns if missing (all instances)
     try {
-      const [cols] = await prodPool.query(
-        "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'totp_secret'"
-      );
-      if (cols[0].c === 0) {
-        await prodPool.query("ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64) NULL AFTER created_by");
-        await prodPool.query("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT FALSE AFTER totp_secret");
-        await prodPool.query("ALTER TABLE users ADD COLUMN totp_backup_codes JSON NULL AFTER totp_enabled");
-        console.log("Added 2FA columns to users table");
+      const [allInstances] = await sharedPool.query("SELECT name FROM database_instances");
+      for (const inst of allInstances) {
+        try {
+          const instPool = await poolManager.getInstancePool(inst.name);
+          const [cols] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'totp_secret'"
+          );
+          if (cols[0].c === 0) {
+            await instPool.query("ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64) NULL AFTER created_by");
+            await instPool.query("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT FALSE AFTER totp_secret");
+            await instPool.query("ALTER TABLE users ADD COLUMN totp_backup_codes JSON NULL AFTER totp_enabled");
+            console.log(`Added 2FA columns to users table (${inst.name})`);
+          }
+        } catch (instErr) {
+          console.error(`2FA migration error for instance ${inst.name}:`, instErr.message);
+        }
       }
     } catch (migErr) {
       console.error("2FA migration error:", migErr.message);
