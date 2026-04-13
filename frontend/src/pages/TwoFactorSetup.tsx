@@ -71,6 +71,10 @@ export default function TwoFactorSetup() {
     setError("");
     try {
       const data = await TwoFactor.verify(codeStr);
+      // Replace setup-only token with full token from server
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
       setBackupCodes(data.backupCodes || []);
       setStep(3);
     } catch (e: any) {

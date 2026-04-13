@@ -11,6 +11,15 @@ export function requireAuth(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded; // { id, email, role }
+
+    // Block pending2FASetup tokens from accessing anything except 2FA endpoints
+    if (decoded.pending2FASetup) {
+      const path = req.path || req.originalUrl || "";
+      if (!path.includes("/2fa/")) {
+        return res.status(403).json({ error: "2FA setup required", requires2FASetup: true });
+      }
+    }
+
     next();
   } catch (error) {
     console.error("JWT verification error:", error.message);

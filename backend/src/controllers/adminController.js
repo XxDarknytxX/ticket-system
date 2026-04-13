@@ -164,10 +164,10 @@ export function makeAdminController(pool) {
               const tempToken = jwt.sign({ ...jwtPayload, pending2FA: true }, process.env.JWT_SECRET, { expiresIn: "5m" });
               return send.ok(res, { requires2FA: true, tempToken, role: "super_admin" });
             }
-            // 2FA not set up — issue full token but flag for setup
-            const token = jwt.sign(jwtPayload, process.env.JWT_SECRET, { expiresIn: "8h" });
+            // 2FA not set up — issue setup-only token (cannot access app routes)
+            const setupToken = jwt.sign({ ...jwtPayload, pending2FASetup: true }, process.env.JWT_SECRET, { expiresIn: "15m" });
             try { await logAudit(auditPool, { user: { id: sa.id, email: sa.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "super_admin", targetId: sa.id }); } catch {}
-            return send.ok(res, { token, role: "super_admin", requires2FASetup: true });
+            return send.ok(res, { token: setupToken, role: "super_admin", requires2FASetup: true });
           }
         }
 
@@ -197,10 +197,10 @@ export function makeAdminController(pool) {
           return send.ok(res, { requires2FA: true, tempToken, role: user.role });
         }
 
-        // 2FA not set up — issue full token but flag for setup
-        const token = jwt.sign(jwtPayload, process.env.JWT_SECRET, { expiresIn: "2h" });
+        // 2FA not set up — issue setup-only token (cannot access app routes)
+        const setupToken = jwt.sign({ ...jwtPayload, pending2FASetup: true }, process.env.JWT_SECRET, { expiresIn: "15m" });
         try { await logAudit(auditPool, { user: { id: user.id, email: user.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login", targetType: "user", targetId: user.id }); } catch {}
-        return send.ok(res, { token, role: user.role, requires2FASetup: !user.totp_enabled });
+        return send.ok(res, { token: setupToken, role: user.role, requires2FASetup: true });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
@@ -1049,7 +1049,12 @@ export function makeAdminController(pool) {
         }
 
         await logAudit(db(req), req, { action: "2fa.enabled", targetType: "user", targetId: req.user.id });
-        return send.ok(res, { enabled: true, backupCodes });
+
+        // Issue a full token (replacing the setup-only token) so the user can access the app
+        const { pending2FASetup, pending2FA, iat, exp, ...cleanPayload } = req.user;
+        const fullToken = jwt.sign(cleanPayload, process.env.JWT_SECRET, { expiresIn: req.user.isSuperAdmin ? "8h" : "2h" });
+
+        return send.ok(res, { enabled: true, backupCodes, token: fullToken });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);
