@@ -56,7 +56,8 @@ export default function TwoFactorVerify() {
       localStorage.removeItem("pendingRole");
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.role);
-      navigate("/");
+      // Full page reload to ensure clean app state after 2FA
+      window.location.href = window.location.pathname.replace(/2fa-verify.*/, "dashboard");
     } catch (e: any) {
       setError(e.message);
       setCode(["", "", "", "", "", ""]);
@@ -78,7 +79,8 @@ export default function TwoFactorVerify() {
       localStorage.removeItem("pendingRole");
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.role);
-      navigate("/");
+      // Full page reload to ensure clean app state after 2FA
+      window.location.href = window.location.pathname.replace(/2fa-verify.*/, "dashboard");
     } catch (e: any) {
       setError(e.message);
       setBackupCode("");
