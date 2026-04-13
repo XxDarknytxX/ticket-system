@@ -1251,56 +1251,68 @@ export default function AdminConfig() {
 
         {/* ===================== VESSELS TAB ===================== */}
         {activeSection === "vessels" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {vessels.map((vessel) => {
-              const capacity = parseInt(vessel.seat_capacity) || 0;
-              const maxCap = 500;
-              const fillPercent = Math.min((capacity / maxCap) * 100, 100);
-
-              return (
-                <div key={vessel.id} className="group glass-card-hover p-5 relative cursor-pointer" onClick={() => openVesselModal(vessel)}>
-                  {/* Ship watermark */}
-                  <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-slate-200/40 pointer-events-none" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M3.75 13.5h16.5m-16.5 0a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 013.75 4.5h16.5a2.25 2.25 0 012.25 2.25v4.5a2.25 2.25 0 01-2.25 2.25m-16.5 0v3a2.25 2.25 0 002.25 2.25h12a2.25 2.25 0 002.25-2.25v-3" />
-                  </svg>
-
-                  {/* Edit / Delete buttons — always visible on mobile */}
-                  <div className="absolute top-3 right-3 z-20 flex items-center space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300">
-                    <button onClick={(e) => { e.stopPropagation(); openVesselModal(vessel); }} className="p-2 rounded-xl text-violet-600 bg-violet-50/80 hover:bg-violet-100 sm:text-slate-400 sm:bg-transparent sm:hover:text-violet-600 sm:hover:bg-violet-50/80 transition-all duration-200" title="Edit">
-                      {icons.pencil()}
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteVessel(vessel.id); }} className="p-2 rounded-xl text-rose-600 bg-rose-50/80 hover:bg-rose-100 sm:text-slate-400 sm:bg-transparent sm:hover:text-rose-600 sm:hover:bg-rose-50/80 transition-all duration-200" title="Delete">
-                      {icons.trash()}
-                    </button>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-slate-900 mb-1 pr-16 relative z-10">{vessel.name}</h3>
-                  <p className="text-sm text-slate-500 mb-4 line-clamp-2 relative z-10">{vessel.description || "No description"}</p>
-
-                  {/* Capacity bar */}
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium text-slate-500">Capacity</span>
-                      <span className="text-sm font-bold text-violet-700">{capacity} seats</span>
+          <div className="glass-card overflow-hidden">
+            <div className="divide-y divide-slate-100/80">
+              {vessels.map((vessel) => {
+                const capacity = parseInt(vessel.seat_capacity) || 0;
+                return (
+                  <div
+                    key={vessel.id}
+                    className="group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-violet-50/30 cursor-pointer transition-colors"
+                    onClick={() => openVesselModal(vessel)}
+                  >
+                    {/* Ship icon */}
+                    <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
+                      {icons.ship("w-5 h-5 text-violet-600")}
                     </div>
-                    <div className="bg-white  rounded-full h-2 overflow-hidden border border-slate-200">
-                      <div className="bg-violet-600 h-2 rounded-full transition-all duration-500" style={{ width: `${fillPercent}%` }} />
+
+                    {/* Name + description */}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-[14px] font-bold text-slate-900 truncate">{vessel.name}</h3>
+                      <p className="text-[11px] text-slate-500 truncate">{vessel.description || "No description"}</p>
+                    </div>
+
+                    {/* Capacity badge */}
+                    <div className="flex-shrink-0 text-right">
+                      <span className="inline-flex items-center px-2.5 py-1 bg-violet-50 text-violet-700 text-[12px] font-bold rounded-lg">
+                        {capacity} seats
+                      </span>
+                    </div>
+
+                    {/* Actions — visible on hover (desktop), always on mobile */}
+                    <div className="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openVesselModal(vessel); }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                        title="Edit"
+                      >
+                        {icons.pencil("w-3.5 h-3.5")}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteVessel(vessel.id); }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete"
+                      >
+                        {icons.trash("w-3.5 h-3.5")}
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Add New Vessel — inline row */}
+            <div className="border-t border-dashed border-slate-200">
+              <button
+                onClick={() => openVesselModal()}
+                className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-violet-700 hover:bg-violet-50/30 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
+                  {icons.plus("w-5 h-5 text-slate-400")}
                 </div>
-              );
-            })}
-
-            {/* Add New Vessel */}
-            <button
-              onClick={() => openVesselModal()}
-              className="group border-2 border-dashed border-slate-300/60 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[180px] hover:border-violet-400/60 hover:bg-violet-50/20  transition-all duration-300"
-            >
-              <div className="w-12 h-12 rounded-full bg-white  group-hover:bg-violet-100/80 flex items-center justify-center mb-3 transition-all duration-300">
-                {icons.plus("w-6 h-6 text-slate-400 group-hover:text-violet-600 transition-colors duration-300")}
-              </div>
-              <span className="text-sm font-medium text-slate-500 group-hover:text-violet-700 transition-colors duration-300">Add Vessel</span>
-            </button>
+                <span className="text-[13px] font-medium">Add Vessel</span>
+              </button>
+            </div>
           </div>
         )}
 
