@@ -1419,94 +1419,11 @@ export default function AdminConfig() {
               </div>
             ) : (
               <div className="glass-card overflow-hidden">
-                {/* Table Header */}
-                <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/60 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  <div className="col-span-3">Route</div>
-                  <div className="col-span-1">Service</div>
-                  <div className="col-span-1 text-center">Adult</div>
-                  <div className="col-span-1 text-center">Student</div>
-                  <div className="col-span-1 text-center">Child</div>
-                  <div className="col-span-1 text-center">Infant</div>
-                  <div className="col-span-1 text-center">Discount</div>
-                  <div className="col-span-3 text-right">Actions</div>
-                </div>
-
-                {/* Route Rows */}
+                {/* Route Cards */}
                 <div className="divide-y divide-slate-100/80">
                   {filteredRoutes.map((route) => (
                     <div key={route.id} className="group hover:bg-violet-50/30 transition-colors duration-200">
-                      {/* Desktop row */}
-                      <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center px-6 py-4">
-                        {/* Route */}
-                        <div className="col-span-3 flex items-center min-w-0">
-                          <div className="flex items-center mr-3 flex-shrink-0">
-                            <div className="w-2.5 h-2.5 bg-violet-500 rounded-full"></div>
-                            <div className="w-10 border-t-2 border-dashed border-slate-300 mx-1"></div>
-                            <div className="w-2.5 h-2.5 bg-violet-500 rounded-full"></div>
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900 truncate">
-                            {route.source} <span className="text-slate-400 font-normal">to</span> {route.destination}
-                          </span>
-                        </div>
-
-                        {/* Service Type */}
-                        <div className="col-span-1">
-                          <span className="inline-flex items-center px-2 py-1 bg-violet-50/80 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200/60 truncate">
-                            {route.service_type_name}
-                          </span>
-                        </div>
-
-                        {/* Prices */}
-                        {passengerTypes.map((p) => {
-                          const originalPrice = parseFloat(route[`${p.type}_price`]) || 0;
-                          const effectivePrice = getEffectivePrice(route, p.type);
-                          const isDiscounted = hasActiveDiscount(route) && effectivePrice !== originalPrice;
-
-                          return (
-                            <div key={p.type} className="col-span-1 text-center">
-                              {isDiscounted ? (
-                                <div>
-                                  <div className="text-xs text-slate-400 line-through">FJ${originalPrice.toFixed(2)}</div>
-                                  <div className={`text-sm font-bold ${p.text}`}>FJ${effectivePrice.toFixed(2)}</div>
-                                </div>
-                              ) : (
-                                <span className={`text-sm font-bold ${p.text}`}>FJ${effectivePrice.toFixed(2)}</span>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Discount badge */}
-                        <div className="col-span-1 text-center">
-                          {hasActiveDiscount(route) ? (
-                            <span className="inline-flex items-center px-2 py-1 bg-rose-100/80 text-rose-700 text-xs font-bold rounded-lg uppercase">SALE</span>
-                          ) : (
-                            <span className="text-xs text-slate-400">--</span>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="col-span-3 flex items-center justify-end gap-2">
-                          <button onClick={() => openRouteModal(route)} className="btn-secondary !py-1.5 !px-3 !text-xs flex items-center">
-                            {icons.pencil("w-3.5 h-3.5 mr-1")}
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => openDiscountModal(route)}
-                            className={`btn-ghost !py-1.5 !px-3 !text-xs flex items-center ${hasActiveDiscount(route) ? "text-amber-700 hover:bg-amber-50/80" : "text-emerald-700 hover:bg-emerald-50/80"}`}
-                          >
-                            {icons.tag("w-3.5 h-3.5 mr-1")}
-                            {hasActiveDiscount(route) ? "Discount" : "Add Discount"}
-                          </button>
-                          <button onClick={() => deleteRoute(route.id)} className="btn-danger !py-1.5 !px-3 !text-xs flex items-center">
-                            {icons.trash("w-3.5 h-3.5 mr-1")}
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Mobile card — compact */}
-                      <div className="lg:hidden p-3 space-y-2.5">
+                      <div className="p-3 sm:p-4 space-y-2.5">
                         {/* Route header */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center min-w-0 flex-1">
