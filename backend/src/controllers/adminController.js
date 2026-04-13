@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { validationResult } from "express-validator";
-import { generateSecret as otpGenerateSecret, generateURI as otpGenerateURI, verify as otpVerify } from "otplib";
+import speakeasy from "speakeasy";
 import { sendEmail, generateResetToken, storeResetToken, validateResetToken, onboardingEmail, resetPasswordEmail, getAccentColor } from "../utils/mailer.js";
 import { logAudit, logAnonAudit } from "../utils/audit.js";
 
@@ -962,10 +962,9 @@ export function makeAdminController(pool) {
     // POST /api/2fa/setup — generate TOTP secret + QR code URI
     setup2FA: async (req, res) => {
       try {
-        // authenticator imported at top of file
-        const secret = otpGenerateSecret();
-        const appName = "Goundar Shipping";
-        const otpauthUri = otpGenerateURI({ secret, issuer: appName, label: req.user.email });
+        const generated = speakeasy.generateSecret({ name: `Goundar Shipping:${req.user.email}`, issuer: "Goundar Shipping" });
+        const secret = generated.base32;
+        const otpauthUri = generated.otpauth_url;
 
         // Store secret temporarily (not enabled until verified)
         if (req.user.isSuperAdmin || req.user.role === "super_admin") {
@@ -986,7 +985,7 @@ export function makeAdminController(pool) {
       const { code } = req.body;
       if (!code) return send.bad(res, "Verification code is required");
       try {
-        // authenticator imported at top of file
+
 
         // Get the user's stored secret
         let secret;
@@ -1001,7 +1000,7 @@ export function makeAdminController(pool) {
 
         if (!secret) return send.bad(res, "2FA setup not initiated. Call /2fa/setup first.");
 
-        const isValid = (await otpVerify({ token: String(code), secret })).valid;
+        const isValid = speakeasy.totp.verify({ secret, encoding: "base32", token: String(code), window: 1 });
         if (!isValid) return send.bad(res, "Invalid verification code. Please try again.");
 
         // Generate backup codes (10 random 8-char alphanumeric codes)
@@ -1048,7 +1047,7 @@ export function makeAdminController(pool) {
         const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
         if (!decoded.pending2FA) return send.bad(res, "Invalid token");
 
-        // authenticator imported at top of file
+
 
         // Get TOTP secret
         let secret;
@@ -1067,7 +1066,7 @@ export function makeAdminController(pool) {
         if (!secret) return send.bad(res, "2FA not configured for this account");
 
         // Try TOTP code first
-        let valid = (await otpVerify({ token: String(code), secret })).valid;
+        let valid = speakeasy.totp.verify({ secret, encoding: "base32", token: String(code), window: 1 });
 
         // If TOTP fails, try backup codes
         if (!valid && backupCodes) {
@@ -1113,7 +1112,7 @@ export function makeAdminController(pool) {
       const { code } = req.body;
       if (!code) return send.bad(res, "Current 2FA code is required to disable");
       try {
-        // authenticator imported at top of file
+
 
         let secret;
         if (req.user.isSuperAdmin || req.user.role === "super_admin") {
@@ -1126,7 +1125,7 @@ export function makeAdminController(pool) {
         }
 
         if (!secret) return send.bad(res, "2FA is not enabled");
-        if (!(await otpVerify({ token: String(code), secret })).valid) return send.bad(res, "Invalid code");
+        if (!speakeasy.totp.verify({ secret, encoding: "base32", token: String(code), window: 1 })) return send.bad(res, "Invalid code");
 
         await db(req).query("UPDATE users SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?", [req.user.id]);
 
