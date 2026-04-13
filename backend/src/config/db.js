@@ -34,7 +34,7 @@ const INSTANCE_SCHEMA = `
     first_name VARCHAR(100) NULL,
     last_name VARCHAR(100) NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('super_admin','admin','agent','dock') NOT NULL DEFAULT 'agent',
+    role ENUM('super_admin','admin','manager','agent','dock') NOT NULL DEFAULT 'agent',
     terminal_id VARCHAR(4) NOT NULL DEFAULT '01',
     team_id INT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,

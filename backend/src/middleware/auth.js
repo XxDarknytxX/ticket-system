@@ -52,6 +52,10 @@ export function requireAdmin(req, res, next) {
 const DEFAULT_PERMS = {
   agent: ["dashboard", "booking", "ticket_search"],
   dock: ["scanner"],
+  manager: [
+    "dashboard", "booking", "ticket_search", "reports",
+    "scan_history", "users", "teams",
+  ],
   admin: [
     "dashboard", "booking", "ticket_search", "reports", "scanner",
     "scan_history", "configuration", "users", "teams", "license_overview",

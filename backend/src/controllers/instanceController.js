@@ -9,6 +9,7 @@ const ALL_PERMISSIONS = [
 ];
 const DEFAULT_ROLE_PERMS = {
   admin: ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"],
+  manager: ["dashboard", "booking", "ticket_search", "reports", "scan_history", "users", "teams"],
   agent: ["dashboard", "booking", "ticket_search"],
   dock: ["scanner"],
 };
