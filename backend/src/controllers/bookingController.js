@@ -283,28 +283,35 @@ export function makeBookingController(pool) {
     // GET /api/dashboard/stats
     getDashboardStats: async (req, res) => {
       try {
+        // Scope to agent's own bookings when role is agent
+        const isAgent = req.user.role === "agent";
+        const agentFilter = isAgent ? "AND booked_by = ?" : "";
+        const agentJoinFilter = isAgent ? "AND b.booked_by = ?" : "";
+        const agentParam = isAgent ? [req.user.id] : [];
+
         const [todayBookings] = await db(req).query(`
           SELECT COUNT(*) AS count, COALESCE(SUM(total_price), 0) AS revenue
-          FROM bookings WHERE DATE(created_at) = CURDATE()
-        `);
+          FROM bookings WHERE DATE(created_at) = CURDATE() ${agentFilter}
+        `, agentParam);
 
         const [todayBoarded] = await db(req).query(`
           SELECT COUNT(*) AS count
-          FROM bookings WHERE status = 'boarded' AND DATE(boarded_at) = CURDATE()
-        `);
+          FROM bookings WHERE status = 'boarded' AND DATE(boarded_at) = CURDATE() ${agentFilter}
+        `, agentParam);
 
         const [totalStats] = await db(req).query(`
           SELECT
             COUNT(*) AS total_bookings,
             COALESCE(SUM(total_price), 0) AS total_revenue,
             COUNT(DISTINCT customer_id) AS unique_customers
-          FROM bookings
-        `);
+          FROM bookings WHERE 1=1 ${agentFilter}
+        `, agentParam);
 
         const [recentBookings] = await db(req).query(`
           ${bookingSelect()}
+          ${isAgent ? "WHERE b.booked_by = ?" : ""}
           ORDER BY b.created_at DESC LIMIT 5
-        `);
+        `, agentParam);
 
         const [todayDepartures] = await db(req).query(`
           SELECT
@@ -316,10 +323,10 @@ export function makeBookingController(pool) {
           JOIN customers c ON b.customer_id = c.id
           JOIN routes r ON b.route_id = r.id
           LEFT JOIN vessels v ON b.vessel_id = v.id
-          WHERE b.travel_date = CURDATE() AND b.status != 'cancelled'
+          WHERE b.travel_date = CURDATE() AND b.status != 'cancelled' ${agentJoinFilter}
           ORDER BY b.created_at DESC
           LIMIT 20
-        `);
+        `, agentParam);
 
         return send.ok(res, {
           today: {

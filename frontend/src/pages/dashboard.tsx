@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useReactToPrint } from "react-to-print";
 import { Auth, Bookings } from "../services/api";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   Ticket,
   DollarSign,
@@ -15,7 +16,7 @@ import {
   ChevronRight,
   Calendar,
   Search,
-  Printer,
+  Download,
 } from "lucide-react";
 
 function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency, getStatusBadge, navigate }: any) {
@@ -24,9 +25,6 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
   const [dateTo, setDateTo] = useState("");
   const [sales, setSales] = useState<any>(null);
   const [salesLoading, setSalesLoading] = useState(true);
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({ contentRef: printRef });
 
   useEffect(() => {
     setSalesLoading(true);
@@ -38,7 +36,7 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
 
   const agentStats = [
     { label: "Today's Bookings", value: todayStats.bookings ?? 0, icon: <Ticket className="w-5 h-5" />, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-    { label: "Passengers Boarded", value: todayStats.boarded ?? 0, icon: <UsersIcon className="w-5 h-5" />, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+    { label: "Today's Revenue", value: formatCurrency(todayStats.revenue), icon: <DollarSign className="w-5 h-5" />, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
   ];
 
   const agentActions = [
@@ -48,6 +46,94 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
 
   const periodLabel = salesPeriod === "today" ? "Today" : salesPeriod === "week" ? "This Week" : `${dateFrom} to ${dateTo}`;
   const agentName = me ? `${me.first_name || ""} ${me.last_name || ""}`.trim() : "Agent";
+
+  const downloadPDF = () => {
+    if (!sales?.bookings?.length) return;
+    const doc = new jsPDF("portrait", "mm", "a4");
+    const pageW = doc.internal.pageSize.getWidth();
+
+    // Header bar
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, pageW, 32, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Goundar Shipping Ltd", 14, 14);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Sales Report", 14, 21);
+    doc.setFontSize(8);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageW - 14, 14, { align: "right" });
+    doc.text(`Agent: ${agentName}`, pageW - 14, 21, { align: "right" });
+
+    // Period & summary section
+    doc.setTextColor(51, 65, 85); // slate-700
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Period: ${periodLabel}`, 14, 44);
+
+    // Summary boxes
+    const boxY = 50;
+    // Bookings box
+    doc.setFillColor(245, 243, 255); // violet-50
+    doc.roundedRect(14, boxY, 85, 20, 3, 3, "F");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("TOTAL BOOKINGS", 18, boxY + 7);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(sales.totals?.total_bookings ?? 0), 18, boxY + 16);
+
+    // Revenue box
+    doc.setFillColor(236, 253, 245); // emerald-50
+    doc.roundedRect(107, boxY, 85, 20, 3, 3, "F");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("TOTAL REVENUE", 111, boxY + 7);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(sales.totals?.total_revenue), 111, boxY + 16);
+
+    // Table
+    autoTable(doc, {
+      startY: boxY + 28,
+      head: [["#", "Ticket ID", "Customer", "Route", "Payment", "Status", "Amount (FJ$)"]],
+      body: sales.bookings.map((b: any, i: number) => [
+        i + 1,
+        b.ticket_id,
+        b.customer_name,
+        `${b.source} → ${b.destination}`,
+        b.payment_method_name || b.payment_method || "—",
+        (b.status || "").charAt(0).toUpperCase() + (b.status || "").slice(1),
+        parseFloat(b.total_price || 0).toFixed(2),
+      ]),
+      foot: [["", "", "", "", "", "Total", parseFloat(sales.totals?.total_revenue || 0).toFixed(2)]],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: "bold", fontSize: 9 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center" },
+        6: { halign: "right" },
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: (data: any) => {
+        // Footer on each page
+        const pageH = doc.internal.pageSize.getHeight();
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.text(`Goundar Shipping Ltd — Sales Report — ${agentName}`, 14, pageH - 8);
+        doc.text(`Page ${doc.getCurrentPageInfo().pageNumber}`, pageW - 14, pageH - 8, { align: "right" });
+      },
+    });
+
+    const dateStr = new Date().toISOString().split("T")[0];
+    doc.save(`Sales_Report_${agentName.replace(/\s+/g, "_")}_${periodLabel.replace(/\s+/g, "_")}_${dateStr}.pdf`);
+  };
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 max-w-[1400px] mx-auto overflow-hidden">
@@ -130,11 +216,12 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
               </button>
             ))}
             <button
-              onClick={() => handlePrint()}
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors flex items-center gap-1.5"
+              onClick={downloadPDF}
+              disabled={!sales?.bookings?.length}
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <Printer className="w-3.5 h-3.5" />
-              Print
+              <Download className="w-3.5 h-3.5" />
+              Download PDF
             </button>
           </div>
         </div>
@@ -215,62 +302,6 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
             </table>
           </div>
         )}
-      </div>
-
-      {/* ═══ Printable Sales Record (hidden on screen) ═══ */}
-      <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white" style={{ fontFamily: "Inter, sans-serif" }}>
-          <div className="mb-6 border-b pb-4">
-            <h1 className="text-lg font-bold text-slate-900">Sales Record</h1>
-            <p className="text-sm text-slate-600 mt-1">Agent: {agentName}</p>
-            <p className="text-sm text-slate-600">Period: {periodLabel}</p>
-            <p className="text-sm text-slate-400">Generated: {new Date().toLocaleString()}</p>
-          </div>
-          {sales && (
-            <>
-              <div className="flex gap-8 mb-6">
-                <div>
-                  <p className="text-xs text-slate-500 uppercase font-semibold">Total Bookings</p>
-                  <p className="text-xl font-bold text-slate-900">{sales.totals?.total_bookings ?? 0}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 uppercase font-semibold">Total Revenue</p>
-                  <p className="text-xl font-bold text-slate-900">{formatCurrency(sales.totals?.total_revenue)}</p>
-                </div>
-              </div>
-              <table className="w-full text-left border-collapse" style={{ fontSize: "11px" }}>
-                <thead>
-                  <tr className="border-b-2 border-slate-200">
-                    <th className="py-2 pr-3 font-semibold text-slate-600">Ticket ID</th>
-                    <th className="py-2 pr-3 font-semibold text-slate-600">Customer</th>
-                    <th className="py-2 pr-3 font-semibold text-slate-600">Route</th>
-                    <th className="py-2 pr-3 font-semibold text-slate-600">Payment</th>
-                    <th className="py-2 pr-3 font-semibold text-slate-600">Status</th>
-                    <th className="py-2 font-semibold text-slate-600 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.bookings?.map((b: any) => (
-                    <tr key={b.ticket_id} className="border-b border-slate-100">
-                      <td className="py-1.5 pr-3 font-mono text-slate-600">{b.ticket_id}</td>
-                      <td className="py-1.5 pr-3 text-slate-800">{b.customer_name}</td>
-                      <td className="py-1.5 pr-3 text-slate-600">{b.source} → {b.destination}</td>
-                      <td className="py-1.5 pr-3 text-slate-600">{b.payment_method_name || b.payment_method || "—"}</td>
-                      <td className="py-1.5 pr-3 text-slate-600 capitalize">{b.status}</td>
-                      <td className="py-1.5 text-right font-semibold text-slate-800">{formatCurrency(b.total_price)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-300">
-                    <td colSpan={5} className="py-2 font-bold text-slate-800 text-right pr-3">Total</td>
-                    <td className="py-2 font-bold text-slate-900 text-right">{formatCurrency(sales.totals?.total_revenue)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Recent Bookings */}
