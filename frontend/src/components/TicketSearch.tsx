@@ -764,7 +764,7 @@ function TicketDetailModal({ ticket, isOpen, onClose }) {
                   <span className="text-slate-800 font-medium">FJ${money(ticket.base_price)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">VAT (9%)</span>
+                  <span className="text-slate-500">VAT ({ticket.vat_rate ?? 9}%)</span>
                   <span className="text-slate-800 font-medium">FJ${money(ticket.vat_amount)}</span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-slate-200/60">
