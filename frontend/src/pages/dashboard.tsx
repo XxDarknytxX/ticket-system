@@ -23,7 +23,7 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
   const [salesPeriod, setSalesPeriod] = useState<"today" | "week" | "custom">("today");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [sales, setSales] = useState<any>(null);
   const [salesLoading, setSalesLoading] = useState(true);
@@ -34,13 +34,20 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
       .catch(() => {});
   }, []);
 
+  const togglePayment = (code: string) => {
+    setSelectedPayments((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
   useEffect(() => {
     setSalesLoading(true);
-    Bookings.getAgentSales(salesPeriod, dateFrom, dateTo, paymentFilter)
+    const pmParam = selectedPayments.length > 0 ? selectedPayments.join(",") : "all";
+    Bookings.getAgentSales(salesPeriod, dateFrom, dateTo, pmParam)
       .then((data: any) => setSales(data))
       .catch(() => setSales(null))
       .finally(() => setSalesLoading(false));
-  }, [salesPeriod, dateFrom, dateTo, paymentFilter]);
+  }, [salesPeriod, dateFrom, dateTo, selectedPayments]);
 
   const agentStats = [
     { label: "Today's Bookings", value: todayStats.bookings ?? 0, icon: <Ticket className="w-5 h-5" />, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
@@ -53,63 +60,117 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
   ];
 
   const periodLabel = salesPeriod === "today" ? "Today" : salesPeriod === "week" ? "This Week" : `${dateFrom} to ${dateTo}`;
-  const paymentLabel = paymentFilter === "all" ? "All Payments" : (paymentMethods.find((pm: any) => pm.code === paymentFilter)?.name || paymentFilter);
+  const paymentLabel = selectedPayments.length === 0 ? "All Payments" : selectedPayments.map((c) => paymentMethods.find((pm: any) => pm.code === c)?.name || c).join(", ");
   const agentName = me ? `${me.first_name || ""} ${me.last_name || ""}`.trim() : "Agent";
 
   const downloadPDF = () => {
     if (!sales?.bookings?.length) return;
     const doc = new jsPDF("portrait", "mm", "a4");
     const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const totalBookings = sales.totals?.total_bookings ?? 0;
+    const totalRevenue = parseFloat(sales.totals?.total_revenue || 0);
 
-    // Header bar
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, pageW, 32, "F");
+    // Read theme color from localStorage
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const frontRoutes = ["dashboard","booking","tickets","reports","scanner","scan-history","configuration","users","teams","license","audit-logs","login","reset-password","verify","2fa-setup","2fa-verify"];
+    const instPrefix = (parts.length > 0 && !frontRoutes.includes(parts[0])) ? parts[0] + "_" : "";
+    const themeHex = localStorage.getItem(instPrefix + "theme_primary_color") || "#7c3aed";
+    const hexToRgb = (hex: string) => {
+      const h = hex.replace("#", "");
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)] as [number, number, number];
+    };
+    const accent = hexToRgb(themeHex);
+    // Lighter tint for backgrounds (mix with white at 15%)
+    const accentLight: [number, number, number] = [
+      Math.round(accent[0] + (255 - accent[0]) * 0.85),
+      Math.round(accent[1] + (255 - accent[1]) * 0.85),
+      Math.round(accent[2] + (255 - accent[2]) * 0.85),
+    ];
+
+    // ── Full-width dark header block ──
+    doc.setFillColor(2, 6, 23); // slate-950
+    doc.rect(0, 0, pageW, 48, "F");
+    // Accent strip at bottom of header using theme color
+    doc.setFillColor(...accent);
+    doc.rect(0, 48, pageW, 1.5, "F");
+
+    // Company name
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
-    doc.text("Goundar Shipping Ltd", 14, 14);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("Sales Report", 14, 21);
-    doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, pageW - 14, 14, { align: "right" });
-    doc.text(`Agent: ${agentName}`, pageW - 14, 21, { align: "right" });
+    doc.text("Goundar Shipping Ltd", 16, 18);
 
-    // Period & summary section
-    doc.setTextColor(51, 65, 85); // slate-700
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Period: ${periodLabel}  |  Payment: ${paymentLabel}`, 14, 44);
-
-    // Summary boxes
-    const boxY = 50;
-    // Bookings box
-    doc.setFillColor(245, 243, 255); // violet-50
-    doc.roundedRect(14, boxY, 85, 20, 3, 3, "F");
-    doc.setFontSize(8);
+    // Subtitle
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text("TOTAL BOOKINGS", 18, boxY + 7);
-    doc.setFontSize(16);
+    doc.setTextColor(...accentLight);
+    doc.text("Sales Report", 16, 26);
+
+    // Agent & date info (right side)
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(agentName, pageW - 16, 16, { align: "right" });
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(new Date().toLocaleString(), pageW - 16, 23, { align: "right" });
+
+    // Period & payment badges
+    doc.setFontSize(8);
+    doc.setTextColor(226, 232, 240); // slate-200
+    doc.text(`Period: ${periodLabel}`, 16, 36);
+    doc.text(`Payment: ${paymentLabel}`, 16, 42);
+
+    // ── Summary cards ──
+    const cardY = 58;
+    const cardH = 28;
+    const cardW = (pageW - 48) / 3;
+    const gap = 8;
+
+    // Card 1: Total Bookings
+    doc.setFillColor(...accentLight);
+    doc.roundedRect(16, cardY, cardW, cardH, 3, 3, "F");
+    doc.setDrawColor(...accent);
+    doc.roundedRect(16, cardY, cardW, cardH, 3, 3, "S");
+    doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(...accent);
+    doc.text("TOTAL BOOKINGS", 20, cardY + 9);
+    doc.setFontSize(18);
     doc.setTextColor(15, 23, 42);
-    doc.text(String(sales.totals?.total_bookings ?? 0), 18, boxY + 16);
+    doc.text(String(totalBookings), 20, cardY + 22);
 
-    // Revenue box
+    // Card 2: Total Revenue
+    const card2X = 16 + cardW + gap;
     doc.setFillColor(236, 253, 245); // emerald-50
-    doc.roundedRect(107, boxY, 85, 20, 3, 3, "F");
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text("TOTAL REVENUE", 111, boxY + 7);
-    doc.setFontSize(16);
+    doc.roundedRect(card2X, cardY, cardW, cardH, 3, 3, "F");
+    doc.setDrawColor(167, 243, 208); // emerald-200
+    doc.roundedRect(card2X, cardY, cardW, cardH, 3, 3, "S");
+    doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.text("TOTAL REVENUE", card2X + 4, cardY + 9);
+    doc.setFontSize(18);
     doc.setTextColor(15, 23, 42);
-    doc.text(formatCurrency(sales.totals?.total_revenue), 111, boxY + 16);
+    doc.text(formatCurrency(totalRevenue), card2X + 4, cardY + 22);
 
-    // Table
+    // Card 3: Avg per Booking
+    const card3X = card2X + cardW + gap;
+    const avg = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+    doc.setFillColor(239, 246, 255); // blue-50
+    doc.roundedRect(card3X, cardY, cardW, cardH, 3, 3, "F");
+    doc.setDrawColor(191, 219, 254); // blue-200
+    doc.roundedRect(card3X, cardY, cardW, cardH, 3, 3, "S");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(37, 99, 235); // blue-600
+    doc.text("AVG PER BOOKING", card3X + 4, cardY + 9);
+    doc.setFontSize(18);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(avg), card3X + 4, cardY + 22);
+
+    // ── Bookings table ──
     autoTable(doc, {
-      startY: boxY + 28,
+      startY: cardY + cardH + 10,
       head: [["#", "Ticket ID", "Customer", "Route", "Payment", "Status", "Amount (FJ$)"]],
       body: sales.bookings.map((b: any, i: number) => [
         i + 1,
@@ -120,23 +181,30 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
         (b.status || "").charAt(0).toUpperCase() + (b.status || "").slice(1),
         parseFloat(b.total_price || 0).toFixed(2),
       ]),
-      foot: [["", "", "", "", "", "Total", parseFloat(sales.totals?.total_revenue || 0).toFixed(2)]],
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold", fontSize: 8 },
-      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: "bold", fontSize: 9 },
+      foot: [["", "", "", "", "", "Total", totalRevenue.toFixed(2)]],
+      styles: { fontSize: 8, cellPadding: 3.5, lineColor: [226, 232, 240], lineWidth: 0.2 },
+      headStyles: { fillColor: [2, 6, 23], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: accentLight as any, textColor: accent as any, fontStyle: "bold", fontSize: 9 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 10, halign: "center" },
-        6: { halign: "right" },
+        6: { halign: "right", fontStyle: "bold" },
       },
-      margin: { left: 14, right: 14 },
-      didDrawPage: (data: any) => {
-        // Footer on each page
-        const pageH = doc.internal.pageSize.getHeight();
+      margin: { left: 16, right: 16 },
+      didDrawPage: () => {
+        // Footer bar on every page
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(0, pageH - 14, pageW, 14, "F");
+        doc.setDrawColor(226, 232, 240);
+        doc.line(0, pageH - 14, pageW, pageH - 14);
         doc.setFontSize(7);
-        doc.setTextColor(148, 163, 184); // slate-400
-        doc.text(`Goundar Shipping Ltd — Sales Report — ${agentName}`, 14, pageH - 8);
-        doc.text(`Page ${doc.getCurrentPageInfo().pageNumber}`, pageW - 14, pageH - 8, { align: "right" });
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(148, 163, 184);
+        doc.text("Goundar Shipping Ltd", 16, pageH - 6);
+        doc.setTextColor(...accent);
+        doc.text(`Page ${doc.getCurrentPageInfo().pageNumber}`, pageW / 2, pageH - 6, { align: "center" });
+        doc.setTextColor(148, 163, 184);
+        doc.text(agentName, pageW - 16, pageH - 6, { align: "right" });
       },
     });
 
@@ -224,16 +292,20 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
                 {p === "today" ? "Today" : p === "week" ? "This Week" : "Custom"}
               </button>
             ))}
-            <select
-              value={paymentFilter}
-              onChange={(e) => setPaymentFilter(e.target.value)}
-              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-            >
-              <option value="all">All Payments</option>
-              {paymentMethods.map((pm: any) => (
-                <option key={pm.code} value={pm.code}>{pm.name}</option>
-              ))}
-            </select>
+            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">|</span>
+            {paymentMethods.map((pm: any) => (
+              <button
+                key={pm.code}
+                onClick={() => togglePayment(pm.code)}
+                className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+                  selectedPayments.includes(pm.code)
+                    ? "bg-teal-600 text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+              >
+                {pm.name}
+              </button>
+            ))}
             <button
               onClick={downloadPDF}
               disabled={!sales?.bookings?.length}

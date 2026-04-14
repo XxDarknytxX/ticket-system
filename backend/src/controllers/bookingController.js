@@ -856,10 +856,15 @@ export function makeBookingController(pool) {
           dateFilter = "AND DATE(b.created_at) = CURDATE()";
         }
 
-        const pmCode = payment_method && payment_method !== "null" && payment_method !== "all"
-          ? String(payment_method).replace(/[^a-zA-Z0-9_-]/g, "")
-          : null;
-        const paymentFilter = pmCode ? `AND COALESCE(b.payment_method, 'unspecified') = '${pmCode}'` : "";
+        let paymentFilter = "";
+        if (payment_method && payment_method !== "null" && payment_method !== "all") {
+          const codes = String(payment_method).split(",").map(c => c.replace(/[^a-zA-Z0-9_-]/g, "")).filter(Boolean);
+          if (codes.length === 1) {
+            paymentFilter = `AND COALESCE(b.payment_method, 'unspecified') = '${codes[0]}'`;
+          } else if (codes.length > 1) {
+            paymentFilter = `AND COALESCE(b.payment_method, 'unspecified') IN (${codes.map(c => `'${c}'`).join(",")})`;
+          }
+        }
 
         const [totals] = await db(req).query(`
           SELECT COUNT(b.id) as total_bookings, COALESCE(SUM(b.total_price),0) as total_revenue
