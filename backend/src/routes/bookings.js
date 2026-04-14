@@ -16,6 +16,9 @@ export function makeBookingRouter(controller, pool) {
   router.get("/bookings/sales-report", requirePermission(pool, "reports"), controller.getSalesReport);
   router.get("/bookings/validation-report", requirePermission(pool, "reports"), controller.getValidationReport);
 
+  // Agent's own sales — scoped to logged-in user
+  router.get("/bookings/my-sales", requirePermission(pool, "dashboard"), controller.getAgentSales);
+
   // Dashboard stats - require dashboard permission
   router.get("/dashboard/stats", requirePermission(pool, "dashboard"), controller.getDashboardStats);
 

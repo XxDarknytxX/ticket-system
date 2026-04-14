@@ -832,6 +832,52 @@ export function makeBookingController(pool) {
       }
     },
 
+    // GET /api/bookings/my-sales — agent's own sales, scoped to req.user.id
+    getAgentSales: async (req, res) => {
+      try {
+        const agentId = req.user.id;
+        const { period, date_from, date_to } = req.query;
+
+        let dateFilter = "";
+        if (period === "custom" && date_from && date_to) {
+          const safeFrom = String(date_from).replace(/[^0-9-]/g, "");
+          const safeTo = String(date_to).replace(/[^0-9-]/g, "");
+          dateFilter = `AND DATE(b.created_at) >= '${safeFrom}' AND DATE(b.created_at) <= '${safeTo}'`;
+        } else if (period === "week") {
+          dateFilter = "AND YEARWEEK(b.created_at, 1) = YEARWEEK(CURDATE(), 1)";
+        } else {
+          // Default to today
+          dateFilter = "AND DATE(b.created_at) = CURDATE()";
+        }
+
+        const [totals] = await db(req).query(`
+          SELECT COUNT(b.id) as total_bookings, COALESCE(SUM(b.total_price),0) as total_revenue
+          FROM bookings b
+          WHERE b.booked_by = ? ${dateFilter}
+        `, [agentId]);
+
+        const [bookings] = await db(req).query(`
+          SELECT
+            b.ticket_id, b.total_price, b.status, b.passenger_type, b.booking_type,
+            b.payment_method, b.created_at,
+            pm.name AS payment_method_name,
+            c.name AS customer_name,
+            r.source, r.destination
+          FROM bookings b
+          JOIN customers c ON b.customer_id = c.id
+          JOIN routes r ON b.route_id = r.id
+          LEFT JOIN payment_methods pm ON pm.code = b.payment_method
+          WHERE b.booked_by = ? ${dateFilter}
+          ORDER BY b.created_at DESC
+        `, [agentId]);
+
+        return send.ok(res, { totals: totals[0], bookings });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
     getValidationReport: async (req, res) => {
       try {
         // Scans by dock officer
