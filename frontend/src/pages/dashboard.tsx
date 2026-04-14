@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Auth, Bookings } from "../services/api";
+import { Auth, Bookings, PaymentMethods } from "../services/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -23,16 +23,24 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
   const [salesPeriod, setSalesPeriod] = useState<"today" | "week" | "custom">("today");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [sales, setSales] = useState<any>(null);
   const [salesLoading, setSalesLoading] = useState(true);
 
   useEffect(() => {
+    PaymentMethods.getAll()
+      .then((data: any) => setPaymentMethods(data.paymentMethods || data || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setSalesLoading(true);
-    Bookings.getAgentSales(salesPeriod, dateFrom, dateTo)
+    Bookings.getAgentSales(salesPeriod, dateFrom, dateTo, paymentFilter)
       .then((data: any) => setSales(data))
       .catch(() => setSales(null))
       .finally(() => setSalesLoading(false));
-  }, [salesPeriod, dateFrom, dateTo]);
+  }, [salesPeriod, dateFrom, dateTo, paymentFilter]);
 
   const agentStats = [
     { label: "Today's Bookings", value: todayStats.bookings ?? 0, icon: <Ticket className="w-5 h-5" />, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
@@ -45,6 +53,7 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
   ];
 
   const periodLabel = salesPeriod === "today" ? "Today" : salesPeriod === "week" ? "This Week" : `${dateFrom} to ${dateTo}`;
+  const paymentLabel = paymentFilter === "all" ? "All Payments" : (paymentMethods.find((pm: any) => pm.code === paymentFilter)?.name || paymentFilter);
   const agentName = me ? `${me.first_name || ""} ${me.last_name || ""}`.trim() : "Agent";
 
   const downloadPDF = () => {
@@ -70,7 +79,7 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
     doc.setTextColor(51, 65, 85); // slate-700
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text(`Period: ${periodLabel}`, 14, 44);
+    doc.text(`Period: ${periodLabel}  |  Payment: ${paymentLabel}`, 14, 44);
 
     // Summary boxes
     const boxY = 50;
@@ -215,6 +224,16 @@ function AgentDashboard({ todayStats, recentBookings, today, me, formatCurrency,
                 {p === "today" ? "Today" : p === "week" ? "This Week" : "Custom"}
               </button>
             ))}
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+            >
+              <option value="all">All Payments</option>
+              {paymentMethods.map((pm: any) => (
+                <option key={pm.code} value={pm.code}>{pm.name}</option>
+              ))}
+            </select>
             <button
               onClick={downloadPDF}
               disabled={!sales?.bookings?.length}

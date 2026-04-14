@@ -843,7 +843,7 @@ export function makeBookingController(pool) {
     getAgentSales: async (req, res) => {
       try {
         const agentId = req.user.id;
-        const { period, date_from, date_to } = req.query;
+        const { period, date_from, date_to, payment_method } = req.query;
 
         let dateFilter = "";
         if (period === "custom" && date_from && date_to) {
@@ -853,14 +853,18 @@ export function makeBookingController(pool) {
         } else if (period === "week") {
           dateFilter = "AND YEARWEEK(b.created_at, 1) = YEARWEEK(CURDATE(), 1)";
         } else {
-          // Default to today
           dateFilter = "AND DATE(b.created_at) = CURDATE()";
         }
+
+        const pmCode = payment_method && payment_method !== "null" && payment_method !== "all"
+          ? String(payment_method).replace(/[^a-zA-Z0-9_-]/g, "")
+          : null;
+        const paymentFilter = pmCode ? `AND COALESCE(b.payment_method, 'unspecified') = '${pmCode}'` : "";
 
         const [totals] = await db(req).query(`
           SELECT COUNT(b.id) as total_bookings, COALESCE(SUM(b.total_price),0) as total_revenue
           FROM bookings b
-          WHERE b.booked_by = ? ${dateFilter}
+          WHERE b.booked_by = ? ${dateFilter} ${paymentFilter}
         `, [agentId]);
 
         const [bookings] = await db(req).query(`
@@ -874,7 +878,7 @@ export function makeBookingController(pool) {
           JOIN customers c ON b.customer_id = c.id
           JOIN routes r ON b.route_id = r.id
           LEFT JOIN payment_methods pm ON pm.code = b.payment_method
-          WHERE b.booked_by = ? ${dateFilter}
+          WHERE b.booked_by = ? ${dateFilter} ${paymentFilter}
           ORDER BY b.created_at DESC
         `, [agentId]);
 

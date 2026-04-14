@@ -159,11 +159,12 @@ export const Bookings = {
   getValidationReport: () => api.get("/bookings/validation-report"),
   createBooking: (booking) => api.post("/bookings", booking),
   emailTickets: (ticket_ids: any, email?: any) => api.post("/bookings/email-tickets", { ticket_ids, email }),
-  getAgentSales: (period?: string, dateFrom?: string, dateTo?: string) => {
+  getAgentSales: (period?: string, dateFrom?: string, dateTo?: string, paymentMethod?: string) => {
     const params = new URLSearchParams();
     params.append("period", period || "today");
     if (dateFrom) params.append("date_from", dateFrom);
     if (dateTo) params.append("date_to", dateTo);
+    if (paymentMethod && paymentMethod !== "all") params.append("payment_method", paymentMethod);
     return api.get(`/bookings/my-sales?${params.toString()}`);
   },
   updateBookingStatus: (ticketId, status) => api.put(`/bookings/${ticketId}/status`, { status }),
