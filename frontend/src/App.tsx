@@ -21,6 +21,16 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import PermissionGuard, { getFirstPermittedRoute } from "./components/PermissionGuard";
 import { Permissions } from "./services/api";
 
+function isTokenExpired(): boolean {
+  const token = localStorage.getItem("token");
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (!payload.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  } catch { return true; }
+}
+
 function getRole() {
   // Read role from localStorage, fallback to decoding JWT
   const stored = localStorage.getItem("role");
@@ -51,7 +61,12 @@ const INSTANCE_BASENAME = getInstanceBasename();
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/login" replace />;
+  if (!token || isTokenExpired()) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 function SuperAdminRoute({ children }) {
@@ -69,7 +84,12 @@ function RoleRedirect() {
   const role = getRole();
 
   useEffect(() => {
-    if (!token) { setTarget("/login"); return; }
+    if (!token || isTokenExpired()) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      setTarget("/login");
+      return;
+    }
     if (role === "super_admin") { setTarget("/dashboard"); return; }
 
     Permissions.getMine()

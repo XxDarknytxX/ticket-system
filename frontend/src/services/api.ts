@@ -54,6 +54,13 @@ class ApiClient {
     const result = await response.json();
 
     if (!response.ok) {
+      // Expired or invalid token — clear session and redirect to login
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        window.location.href = window.location.pathname.replace(/\/[^/]*$/, "/login");
+        throw new Error("Session expired");
+      }
       throw new Error(result.error || "An error occurred");
     }
 

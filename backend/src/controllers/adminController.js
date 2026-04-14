@@ -1052,7 +1052,7 @@ export function makeAdminController(pool) {
 
         // Issue a full token (replacing the setup-only token) so the user can access the app
         const { pending2FASetup, pending2FA, iat, exp, ...cleanPayload } = req.user;
-        const fullToken = jwt.sign(cleanPayload, process.env.JWT_SECRET, { expiresIn: req.user.isSuperAdmin ? "8h" : "2h" });
+        const fullToken = jwt.sign(cleanPayload, process.env.JWT_SECRET, { expiresIn: "10h" });
 
         return send.ok(res, { enabled: true, backupCodes, token: fullToken });
       } catch (e) {
@@ -1116,7 +1116,7 @@ export function makeAdminController(pool) {
 
         // Issue full JWT (remove pending2FA flag)
         const { pending2FA, iat, exp, ...payload } = decoded;
-        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: decoded.isSuperAdmin ? "8h" : "2h" });
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "10h" });
 
         const auditPool = db(req);
         try { await logAudit(auditPool, { user: { id: decoded.id, email: decoded.email }, headers: req.headers, ip: req.ip, connection: req.connection }, { action: "login.2fa_verified", targetType: "user", targetId: decoded.id }); } catch {}
