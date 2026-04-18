@@ -1019,44 +1019,53 @@ export default function AgentBooking() {
             />
           </div>
 
-          {/* Tier selectors — only shown when the corresponding route has first-class pricing enabled.
-              For return bookings, outbound and return can be different tiers. */}
+          {/* Tier selectors — shown when ANY selected route offers first-class.
+              For return bookings, both selectors always appear together. If a given
+              direction doesn't offer First Class, its FC option is disabled (greyed). */}
           {(!!selectedRoute?.first_class_enabled || (bookingType === "return" && !!reverseRoute?.first_class_enabled)) && (
-            <div className={`grid gap-4 ${bookingType === "return" && !!reverseRoute?.first_class_enabled && !!selectedRoute?.first_class_enabled ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} animate-fade-in-up delay-150`}>
-              {!!selectedRoute?.first_class_enabled && (
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-slate-700">
-                    {bookingType === "return" ? "Outbound Class" : "Travel Class"}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTier("economy")}
-                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                        selectedTier === "economy"
-                          ? "border-violet-500 bg-violet-50 text-violet-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-violet-500" />
-                      Economy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTier("first_class")}
-                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                        selectedTier === "first_class"
+            <div className={`grid gap-4 ${bookingType === "return" && reverseRoute ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} animate-fade-in-up delay-150`}>
+              {/* Outbound tier */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {bookingType === "return" ? "Outbound Class" : "Travel Class"}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTier("economy")}
+                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
+                      selectedTier === "economy"
+                        ? "border-violet-500 bg-violet-50 text-violet-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-violet-500" />
+                    Economy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedRoute?.first_class_enabled}
+                    onClick={() => setSelectedTier("first_class")}
+                    title={!selectedRoute?.first_class_enabled ? "First Class not available on this route" : ""}
+                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
+                      !selectedRoute?.first_class_enabled
+                        ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed opacity-60"
+                        : selectedTier === "first_class"
                           ? "border-sky-500 bg-sky-50 text-sky-700"
                           : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-sky-500" />
-                      First Class
-                    </button>
-                  </div>
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${!selectedRoute?.first_class_enabled ? "bg-slate-300" : "bg-sky-500"}`} />
+                    First Class
+                  </button>
                 </div>
-              )}
-              {bookingType === "return" && !!reverseRoute?.first_class_enabled && (
+                {!selectedRoute?.first_class_enabled && (
+                  <p className="text-[10px] text-slate-400">Economy only for this route.</p>
+                )}
+              </div>
+
+              {/* Return tier */}
+              {bookingType === "return" && reverseRoute && (
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-slate-700">Return Class</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1074,17 +1083,24 @@ export default function AgentBooking() {
                     </button>
                     <button
                       type="button"
+                      disabled={!reverseRoute?.first_class_enabled}
                       onClick={() => setSelectedReturnTier("first_class")}
+                      title={!reverseRoute?.first_class_enabled ? "First Class not available on the return route" : ""}
                       className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                        selectedReturnTier === "first_class"
-                          ? "border-sky-500 bg-sky-50 text-sky-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                        !reverseRoute?.first_class_enabled
+                          ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed opacity-60"
+                          : selectedReturnTier === "first_class"
+                            ? "border-sky-500 bg-sky-50 text-sky-700"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                       }`}
                     >
-                      <span className="w-2 h-2 rounded-full bg-sky-500" />
+                      <span className={`w-2 h-2 rounded-full ${!reverseRoute?.first_class_enabled ? "bg-slate-300" : "bg-sky-500"}`} />
                       First Class
                     </button>
                   </div>
+                  {!reverseRoute?.first_class_enabled && (
+                    <p className="text-[10px] text-slate-400">Economy only for the return route.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -1519,8 +1535,13 @@ export default function AgentBooking() {
 
               {/* Pricing grid */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 mb-3 uppercase tracking-wider">
+                <h4 className="text-[10px] font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2 flex-wrap">
                   {bookingType === "return" && reverseRoute ? "Outbound Prices (VAT Incl.)" : "Prices (VAT Incl.)"}
+                  {!!selectedRoute.first_class_enabled && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${selectedTier === "first_class" ? "bg-sky-100 text-sky-700 border-sky-200" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                      {selectedTier === "first_class" ? "First Class" : "Economy"}
+                    </span>
+                  )}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
@@ -1529,9 +1550,10 @@ export default function AgentBooking() {
                     { type: "child", label: "Child", color: "amber" },
                     { type: "infant", label: "Infant", color: "violet" },
                   ].map((p) => {
-                    const effective = getEffectivePrice(selectedRoute, p.type);
-                    const original = parseFloat(selectedRoute[`${p.type}_price`]);
-                    const discounted = isPriceDiscounted(selectedRoute, p.type);
+                    const effective = getEffectivePrice(selectedRoute, p.type, selectedTier);
+                    const outboundTier = (selectedTier === "first_class" && selectedRoute.first_class_enabled) ? "first_class" : "economy";
+                    const original = outboundTier === "first_class" ? parseFloat(selectedRoute[`first_class_${p.type}_price`]) : parseFloat(selectedRoute[`${p.type}_price`]);
+                    const discounted = isPriceDiscounted(selectedRoute, p.type, selectedTier);
                     return (
                       <div key={p.type} className="bg-white rounded-lg p-2.5 text-center border border-slate-100">
                         <p className="text-[10px] text-slate-400 font-semibold uppercase">{p.label}</p>

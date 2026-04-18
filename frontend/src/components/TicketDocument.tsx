@@ -119,14 +119,12 @@ export default function TicketDocument({ booking }) {
                   {booking?.status}
                 </span>
               </div>
-              {booking?.tier === "first_class" && (
-                <div>
-                  <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Class</div>
-                  <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white bg-black">
-                    First Class
-                  </span>
-                </div>
-              )}
+              <div>
+                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Class</div>
+                <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white bg-black">
+                  {booking?.tier === "first_class" ? "First Class" : "Economy"}
+                </span>
+              </div>
               <div>
                 <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Ticket ID</div>
                 <div className="text-[9pt] font-mono font-normal text-black break-all leading-tight">{booking?.ticket_id}</div>
@@ -258,6 +256,12 @@ export default function TicketDocument({ booking }) {
                 <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
                 <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none" style={{ backgroundColor: statusColor() }}>
                   {booking?.status}
+                </span>
+              </div>
+              <div>
+                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Class</div>
+                <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none bg-black">
+                  {booking?.tier === "first_class" ? "First Class" : "Economy"}
                 </span>
               </div>
             </div>
