@@ -95,12 +95,19 @@ export function makeServiceController(pool) {
     // VESSEL MANAGEMENT
     // ============================================================================
 
-    // GET /api/vessels
+    // GET /api/vessels?status=active  (status optional — 'active' returns only active vessels)
     getVessels: async (req, res) => {
       try {
-        const [rows] = await db(req).query(
-          "SELECT * FROM vessels ORDER BY name ASC"
-        );
+        const { status } = req.query;
+        const allowed = new Set(["active", "in_repair", "retired"]);
+        let sql = "SELECT * FROM vessels";
+        const params = [];
+        if (status && allowed.has(status)) {
+          sql += " WHERE status = ?";
+          params.push(status);
+        }
+        sql += " ORDER BY name ASC";
+        const [rows] = await db(req).query(sql, params);
         return send.ok(res, { vessels: rows });
       } catch (e) {
         console.error(e);
@@ -117,11 +124,13 @@ export function makeServiceController(pool) {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return send.bad(res, errors.array()[0].msg);
 
-      const { name, seat_capacity, description } = req.body;
+      const { name, seat_capacity, description, status } = req.body;
+      const allowed = new Set(["active", "in_repair", "retired"]);
+      const finalStatus = status && allowed.has(status) ? status : "active";
       try {
         const [result] = await db(req).query(
-          "INSERT INTO vessels (name, seat_capacity, description) VALUES (?, ?, ?)",
-          [name, seat_capacity, description || null]
+          "INSERT INTO vessels (name, seat_capacity, description, status) VALUES (?, ?, ?, ?)",
+          [name, seat_capacity, description || null, finalStatus]
         );
 
         const [newVessel] = await db(req).query(
@@ -146,12 +155,26 @@ export function makeServiceController(pool) {
       }
 
       const { id } = req.params;
-      const { name, seat_capacity, description } = req.body;
+      const { name, seat_capacity, description, status } = req.body;
+      const allowed = new Set(["active", "in_repair", "retired"]);
 
       try {
+        // Build dynamic update to allow status-only patches
+        const fields = [];
+        const params = [];
+        if (name !== undefined) { fields.push("name = ?"); params.push(name); }
+        if (seat_capacity !== undefined) { fields.push("seat_capacity = ?"); params.push(seat_capacity); }
+        if (description !== undefined) { fields.push("description = ?"); params.push(description || null); }
+        if (status !== undefined && allowed.has(status)) { fields.push("status = ?"); params.push(status); }
+
+        if (fields.length === 0) {
+          return send.bad(res, "No fields to update");
+        }
+        params.push(id);
+
         const [result] = await db(req).query(
-          "UPDATE vessels SET name = ?, seat_capacity = ?, description = ? WHERE id = ?",
-          [name, seat_capacity, description || null, id]
+          `UPDATE vessels SET ${fields.join(", ")} WHERE id = ?`,
+          params
         );
 
         if (result.affectedRows === 0) {

@@ -43,15 +43,17 @@ export function makeServiceRouter(controller) {
       body("name").notEmpty().withMessage("Vessel name is required"),
       body("seat_capacity").isInt({ min: 1 }).withMessage("Seat capacity must be at least 1"),
       body("description").optional(),
+      body("status").optional().isIn(["active", "in_repair", "retired"]).withMessage("Invalid status"),
     ],
     controller.createVessel
   );
   router.put(
     "/vessels/:id",
     [
-      body("name").notEmpty().withMessage("Vessel name is required"),
-      body("seat_capacity").isInt({ min: 1 }).withMessage("Seat capacity must be at least 1"),
+      body("name").optional().notEmpty().withMessage("Vessel name cannot be empty"),
+      body("seat_capacity").optional().isInt({ min: 1 }).withMessage("Seat capacity must be at least 1"),
       body("description").optional(),
+      body("status").optional().isIn(["active", "in_repair", "retired"]).withMessage("Invalid status"),
     ],
     controller.updateVessel
   );

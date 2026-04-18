@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS vessels (
   name VARCHAR(255) NOT NULL UNIQUE,
   seat_capacity INT NOT NULL DEFAULT 0,
   description TEXT,
+  status ENUM('active','in_repair','retired') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 

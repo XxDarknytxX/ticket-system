@@ -127,7 +127,7 @@ export default function AgentBooking() {
         setLoading(true);
         const [stData, vData, pmData] = await Promise.all([
           Services.getServiceTypes(),
-          Services.getVessels(),
+          Services.getVessels("active"),
           PaymentMethods.getAll().catch(() => ({ paymentMethods: [] })),
         ]);
         setServiceTypes(stData.serviceTypes || []);

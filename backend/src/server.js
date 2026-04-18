@@ -81,12 +81,21 @@ try {
             await instPool.query("ALTER TABLE users ADD COLUMN totp_backup_codes JSON NULL AFTER totp_enabled");
             console.log(`Added 2FA columns to users table (${inst.name})`);
           }
+
+          // Vessel status migration
+          const [vCols] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vessels' AND COLUMN_NAME = 'status'"
+          );
+          if (vCols[0].c === 0) {
+            await instPool.query("ALTER TABLE vessels ADD COLUMN status ENUM('active','in_repair','retired') NOT NULL DEFAULT 'active' AFTER description");
+            console.log(`Added status column to vessels table (${inst.name})`);
+          }
         } catch (instErr) {
-          console.error(`2FA migration error for instance ${inst.name}:`, instErr.message);
+          console.error(`Migration error for instance ${inst.name}:`, instErr.message);
         }
       }
     } catch (migErr) {
-      console.error("2FA migration error:", migErr.message);
+      console.error("Migration error:", migErr.message);
     }
 
     // Also add to shared super_admins if missing

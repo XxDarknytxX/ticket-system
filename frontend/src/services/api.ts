@@ -118,7 +118,7 @@ export const Services = {
   updateServiceType: (id, serviceType) => api.put(`/service-types/${id}`, serviceType),
 
   // Vessels
-  getVessels: () => api.get("/vessels"),
+  getVessels: (status?: string) => api.get(status ? `/vessels?status=${status}` : "/vessels"),
   createVessel: (vessel) => api.post("/vessels", vessel),
   updateVessel: (id, vessel) => api.put(`/vessels/${id}`, vessel),
   deleteVessel: (id) => api.delete(`/vessels/${id}`),

@@ -274,6 +274,7 @@ export default function AdminConfig() {
     name: "",
     seat_capacity: "",
     description: "",
+    status: "active",
   });
 
   // Route Form with pricing calculation and VEP/VIP modes
@@ -694,9 +695,10 @@ export default function AdminConfig() {
         name: vessel.name,
         seat_capacity: vessel.seat_capacity,
         description: vessel.description || "",
+        status: vessel.status || "active",
       });
     } else {
-      setVesselForm({ name: "", seat_capacity: "", description: "" });
+      setVesselForm({ name: "", seat_capacity: "", description: "", status: "active" });
     }
     setShowVesselModal(true);
   };
@@ -704,7 +706,17 @@ export default function AdminConfig() {
   const closeVesselModal = () => {
     setShowVesselModal(false);
     setEditingVessel(null);
-    setVesselForm({ name: "", seat_capacity: "", description: "" });
+    setVesselForm({ name: "", seat_capacity: "", description: "", status: "active" });
+  };
+
+  const updateVesselStatus = async (vessel, newStatus) => {
+    try {
+      await Services.updateVessel(vessel.id, { status: newStatus });
+      showMessage(`Vessel marked as ${newStatus.replace("_", " ")}`);
+      loadData();
+    } catch (error) {
+      showMessage(`Error: ${error.message}`, true);
+    }
   };
 
   const handleVesselSubmit = async () => {
@@ -1265,10 +1277,17 @@ export default function AdminConfig() {
             <div className="divide-y divide-slate-100/80">
               {vessels.map((vessel) => {
                 const capacity = parseInt(vessel.seat_capacity) || 0;
+                const status = vessel.status || "active";
+                const statusConfig: Record<string, { label: string; cls: string; dot: string }> = {
+                  active: { label: "Active", cls: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+                  in_repair: { label: "In Repair", cls: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
+                  retired: { label: "Retired", cls: "bg-slate-100 text-slate-500", dot: "bg-slate-400" },
+                };
+                const sc = statusConfig[status] || statusConfig.active;
                 return (
                   <div
                     key={vessel.id}
-                    className="group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-violet-50/30 cursor-pointer transition-colors"
+                    className={`group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-violet-50/30 cursor-pointer transition-colors ${status !== "active" ? "opacity-70" : ""}`}
                     onClick={() => openVesselModal(vessel)}
                   >
                     {/* Ship icon */}
@@ -1282,6 +1301,12 @@ export default function AdminConfig() {
                       <p className="text-[11px] text-slate-500 truncate">{vessel.description || "No description"}</p>
                     </div>
 
+                    {/* Status badge */}
+                    <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg ${sc.cls}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                      {sc.label}
+                    </span>
+
                     {/* Capacity badge */}
                     <div className="flex-shrink-0 text-right">
                       <span className="inline-flex items-center px-2.5 py-1 bg-violet-50 text-violet-700 text-[12px] font-bold rounded-lg">
@@ -1291,6 +1316,15 @@ export default function AdminConfig() {
 
                     {/* Actions — visible on hover (desktop), always on mobile */}
                     <div className="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      {status !== "active" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); updateVesselStatus(vessel, "active"); }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          title="Reactivate"
+                        >
+                          {icons.check ? icons.check("w-3.5 h-3.5") : <span className="text-xs font-bold">✓</span>}
+                        </button>
+                      )}
                       <button
                         onClick={(e) => { e.stopPropagation(); openVesselModal(vessel); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
@@ -2097,6 +2131,31 @@ export default function AdminConfig() {
                   className="glass-input w-full resize-none"
                   placeholder="Brief description of this vessel"
                 />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: "active", label: "Active", dot: "bg-emerald-500", active: "bg-emerald-50 border-emerald-500 text-emerald-700" },
+                    { value: "in_repair", label: "In Repair", dot: "bg-amber-500", active: "bg-amber-50 border-amber-500 text-amber-700" },
+                    { value: "retired", label: "Retired", dot: "bg-slate-400", active: "bg-slate-100 border-slate-400 text-slate-700" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setVesselForm({ ...vesselForm, status: opt.value })}
+                      className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border-2 text-[12px] font-semibold transition-all ${
+                        vesselForm.status === opt.value ? opt.active : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${opt.dot}`} />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">Only active vessels appear in bookings. Retired and In Repair vessels stay in config.</p>
               </div>
 
               {/* Capacity Preview */}
