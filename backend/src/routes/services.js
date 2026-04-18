@@ -102,7 +102,25 @@ export function makeServiceRouter(controller) {
     ],
     controller.updateRouteDiscount
   );
-  
+
+  // First-class pricing endpoint
+  router.put(
+    "/routes/:id/first-class",
+    [
+      body("first_class_enabled").isBoolean().withMessage("first_class_enabled must be a boolean"),
+      body("first_class_adult_price").optional().isFloat({ min: 0 }),
+      body("first_class_student_price").optional().isFloat({ min: 0 }),
+      body("first_class_child_price").optional().isFloat({ min: 0 }),
+      body("first_class_infant_price").optional().isFloat({ min: 0 }),
+      body("first_class_discount_enabled").optional().isBoolean(),
+      body("first_class_discount_adult_price").optional().isFloat({ min: 0 }),
+      body("first_class_discount_student_price").optional().isFloat({ min: 0 }),
+      body("first_class_discount_child_price").optional().isFloat({ min: 0 }),
+      body("first_class_discount_infant_price").optional().isFloat({ min: 0 }),
+    ],
+    controller.updateRouteFirstClass
+  );
+
   router.delete("/routes/:id", controller.deleteRoute);
 
   return router;

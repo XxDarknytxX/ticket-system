@@ -20,6 +20,7 @@ export default function AgentBooking() {
   // Step 1 selections
   const [selectedServiceType, setSelectedServiceType] = useState("");
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [selectedTier, setSelectedTier] = useState<"economy" | "first_class">("economy");
   const [selectedVessel, setSelectedVessel] = useState(null);
   const [selectedReturnVessel, setSelectedReturnVessel] = useState(null);
   const [bookingType, setBookingType] = useState("one_way");
@@ -162,8 +163,24 @@ export default function AgentBooking() {
   }, [selectedServiceType]);
 
   /* ═══════════════════════ PRICING HELPERS ═══════════════════════ */
-  const getEffectivePrice = (route, type) => {
+  // Resolve tier for a given route — if tier isn't explicitly requested, use selectedTier
+  // falling back to economy if the route doesn't actually offer first_class.
+  const resolveTier = (route: any, requestedTier?: "economy" | "first_class") => {
+    const want = requestedTier || selectedTier || "economy";
+    if (want === "first_class" && route?.first_class_enabled) return "first_class";
+    return "economy";
+  };
+
+  const getEffectivePrice = (route: any, type: string, tierOverride?: "economy" | "first_class") => {
     if (!route) return 0;
+    const tier = resolveTier(route, tierOverride);
+    if (tier === "first_class") {
+      if (route.first_class_discount_enabled) {
+        const dp = parseFloat(route[`first_class_discount_${type}_price`]);
+        if (dp > 0) return dp;
+      }
+      return parseFloat(route[`first_class_${type}_price`]) || 0;
+    }
     if (route.discount_enabled) {
       const dp = parseFloat(route[`discount_${type}_price`]);
       if (dp > 0) return dp;
@@ -171,15 +188,23 @@ export default function AgentBooking() {
     return parseFloat(route[`${type}_price`]) || 0;
   };
 
-  const isPriceDiscounted = (route, type) => {
-    if (!route || !route.discount_enabled) return false;
+  const isPriceDiscounted = (route: any, type: string, tierOverride?: "economy" | "first_class") => {
+    if (!route) return false;
+    const tier = resolveTier(route, tierOverride);
+    if (tier === "first_class") {
+      if (!route.first_class_discount_enabled) return false;
+      const dp = parseFloat(route[`first_class_discount_${type}_price`]);
+      const rp = parseFloat(route[`first_class_${type}_price`]);
+      return dp > 0 && dp < rp;
+    }
+    if (!route.discount_enabled) return false;
     const dp = parseFloat(route[`discount_${type}_price`]);
     const rp = parseFloat(route[`${type}_price`]);
     return dp > 0 && dp < rp;
   };
 
-  const calculateTicketPrice = (route, passengerType) => {
-    const totalPrice = getEffectivePrice(route, passengerType);
+  const calculateTicketPrice = (route: any, passengerType: string, tierOverride?: "economy" | "first_class") => {
+    const totalPrice = getEffectivePrice(route, passengerType, tierOverride);
     const vatRate = parseFloat(route.vat_rate) || 0;
     const basePrice = totalPrice / (1 + vatRate / 100);
     const vatAmount = totalPrice - basePrice;
@@ -500,6 +525,7 @@ export default function AgentBooking() {
       if (bookingType === "multi") {
         for (const passenger of passengers) {
           for (const leg of legs) {
+            const legTier = (selectedTier === "first_class" && leg.route?.first_class_enabled) ? "first_class" : "economy";
             const payload = {
               customer_name: passenger.name,
               customer_email: passenger.email || "",
@@ -509,6 +535,7 @@ export default function AgentBooking() {
               vessel_id: leg.vessel.id,
               passenger_type: passenger.passengerType,
               booking_type: "multi",
+              tier: legTier,
               travel_date: leg.travelDate,
               notes: notes || undefined,
               payment_method: selectedPaymentMethod || undefined,
@@ -522,6 +549,7 @@ export default function AgentBooking() {
         }
       } else {
         for (const passenger of passengers) {
+          const outboundTier = (selectedTier === "first_class" && selectedRoute?.first_class_enabled) ? "first_class" : "economy";
           const basePayload = {
             customer_name: passenger.name,
             customer_email: passenger.email || "",
@@ -530,6 +558,7 @@ export default function AgentBooking() {
             route_id: selectedRoute.id,
             vessel_id: selectedVessel.id,
             passenger_type: passenger.passengerType,
+            tier: outboundTier,
             notes: notes || undefined,
             payment_method: selectedPaymentMethod || undefined,
           } as any;
@@ -548,12 +577,14 @@ export default function AgentBooking() {
 
           // Return ticket
           if (bookingType === "return" && returnDate && reverseRoute) {
+            const returnTier = (selectedTier === "first_class" && reverseRoute?.first_class_enabled) ? "first_class" : "economy";
             const returnPayload = {
               ...basePayload,
               booking_type: "return",
               travel_date: returnDate,
               vessel_id: selectedReturnVessel.id,
               route_id: reverseRoute.id,
+              tier: returnTier,
             };
             const returnResponse = await Bookings.createBooking(returnPayload);
             results.push(returnResponse.booking);
@@ -977,11 +1008,45 @@ export default function AgentBooking() {
               onChange={(val) => {
                 const route = routes.find((r) => String(r.id) === String(val));
                 setSelectedRoute(route || null);
+                setSelectedTier("economy"); // reset tier on route change
               }}
               disabled={!selectedServiceType}
               placeholder="Search routes..."
             />
           </div>
+
+          {/* Tier selector — only shown when route has first-class pricing enabled */}
+          {selectedRoute?.first_class_enabled && (
+            <div className="space-y-1.5 animate-fade-in-up delay-150">
+              <label className="block text-sm font-medium text-slate-700">Travel Class</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTier("economy")}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                    selectedTier === "economy"
+                      ? "border-violet-500 bg-violet-50 text-violet-700"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                  Economy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTier("first_class")}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                    selectedTier === "first_class"
+                      ? "border-sky-500 bg-sky-50 text-sky-700"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-sky-500" />
+                  First Class
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Vessels - side by side for return */}
           <div className={`grid gap-4 ${bookingType === "return" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
@@ -1310,11 +1375,18 @@ export default function AgentBooking() {
                   </svg>
                   Route Preview
                 </h3>
-                {!!selectedRoute.discount_enabled && (
-                  <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200">
-                    Discount Active
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {selectedRoute.first_class_enabled && (
+                    <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${selectedTier === "first_class" ? "bg-sky-100 text-sky-700 border-sky-200" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                      {selectedTier === "first_class" ? "First Class" : "Economy"}
+                    </span>
+                  )}
+                  {!!selectedRoute.discount_enabled && (
+                    <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200">
+                      Discount Active
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Route visual - clean horizontal layout */}

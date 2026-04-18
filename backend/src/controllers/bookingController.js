@@ -477,7 +477,10 @@ export function makeBookingController(pool) {
         custom_validity_days,
         notes,
         payment_method,
+        tier: rawTier,
       } = req.body;
+
+      const tier = rawTier === "first_class" ? "first_class" : "economy";
 
       if (
         customer_gender &&
@@ -490,14 +493,7 @@ export function makeBookingController(pool) {
         await db(req).query("START TRANSACTION");
 
         const [routeRows] = await db(req).query(
-          `SELECT
-            r.*,
-            st.vat_rate,
-            r.discount_enabled,
-            r.discount_adult_price,
-            r.discount_student_price,
-            r.discount_child_price,
-            r.discount_infant_price
+          `SELECT r.*, st.vat_rate
           FROM routes r
           JOIN service_types st ON r.service_type_id = st.id
           WHERE r.id = ?`,
@@ -522,24 +518,47 @@ export function makeBookingController(pool) {
 
         const route = routeRows[0];
 
+        // If requested tier is first_class but route doesn't offer it, fall back to economy
+        const effectiveTier = (tier === "first_class" && route.first_class_enabled) ? "first_class" : "economy";
+
         const getEffectivePrice = (passengerType) => {
-          if (route.discount_enabled) {
-            switch (passengerType) {
-              case "adult":   return parseFloat(route.discount_adult_price) || parseFloat(route.adult_price);
-              case "student": return parseFloat(route.discount_student_price) || parseFloat(route.student_price);
-              case "child":   return parseFloat(route.discount_child_price) || parseFloat(route.child_price);
-              case "infant":  return parseFloat(route.discount_infant_price) || parseFloat(route.infant_price);
-              default:        return 0;
+          const num = (v) => parseFloat(v) || 0;
+          if (effectiveTier === "first_class") {
+            const fcRegular = {
+              adult: num(route.first_class_adult_price),
+              student: num(route.first_class_student_price),
+              child: num(route.first_class_child_price),
+              infant: num(route.first_class_infant_price),
+            };
+            if (route.first_class_discount_enabled) {
+              const fcDiscount = {
+                adult: num(route.first_class_discount_adult_price),
+                student: num(route.first_class_discount_student_price),
+                child: num(route.first_class_discount_child_price),
+                infant: num(route.first_class_discount_infant_price),
+              };
+              const d = fcDiscount[passengerType];
+              if (d > 0) return d;
             }
-          } else {
-            switch (passengerType) {
-              case "adult":   return parseFloat(route.adult_price) || 0;
-              case "student": return parseFloat(route.student_price) || 0;
-              case "child":   return parseFloat(route.child_price) || 0;
-              case "infant":  return parseFloat(route.infant_price) || 0;
-              default:        return 0;
-            }
+            return fcRegular[passengerType] || 0;
           }
+          // Economy (default) — existing logic
+          const regular = {
+            adult: num(route.adult_price),
+            student: num(route.student_price),
+            child: num(route.child_price),
+            infant: num(route.infant_price),
+          };
+          if (route.discount_enabled) {
+            const discount = {
+              adult: num(route.discount_adult_price),
+              student: num(route.discount_student_price),
+              child: num(route.discount_child_price),
+              infant: num(route.discount_infant_price),
+            };
+            return discount[passengerType] > 0 ? discount[passengerType] : regular[passengerType];
+          }
+          return regular[passengerType] || 0;
         };
 
         const totalPrice = getEffectivePrice(passenger_type);
@@ -612,9 +631,9 @@ export function makeBookingController(pool) {
 
         const [bookingResult] = await db(req).query(
           `INSERT INTO bookings (
-            ticket_id, customer_id, route_id, vessel_id, booking_type, passenger_type, passenger_gender,
+            ticket_id, customer_id, route_id, vessel_id, booking_type, passenger_type, tier, passenger_gender,
             base_price, vat_amount, total_price, travel_date, return_date, custom_validity_days, notes, payment_method, qr_code_data, booked_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             ticketId,
             customerId,
@@ -622,6 +641,7 @@ export function makeBookingController(pool) {
             vessel_id || null,
             booking_type,
             passenger_type,
+            effectiveTier,
             genderValue,
             parseFloat(basePrice.toFixed(2)),
             parseFloat(vatAmount.toFixed(2)),

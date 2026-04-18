@@ -115,6 +115,18 @@ CREATE TABLE IF NOT EXISTS routes (
   discount_child_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   discount_infant_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 
+  -- First Class tier (optional, per-route)
+  first_class_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  first_class_adult_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_student_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_child_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_infant_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_discount_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  first_class_discount_adult_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_discount_student_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_discount_child_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  first_class_discount_infant_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -164,6 +176,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   -- Booking Details
   booking_type ENUM('one_way', 'return', 'multi') NOT NULL DEFAULT 'one_way',
   passenger_type ENUM('adult', 'student', 'child', 'infant') NOT NULL,
+  tier ENUM('economy','first_class') NOT NULL DEFAULT 'economy',
   passenger_gender ENUM('male','female') NULL,
 
   -- Pricing Breakdown (VAT calculations)

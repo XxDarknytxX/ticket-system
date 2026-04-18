@@ -261,6 +261,20 @@ export default function AdminConfig() {
   const [editingVessel, setEditingVessel] = useState(null);
   const [editingRoute, setEditingRoute] = useState(null);
   const [editingRouteForDiscount, setEditingRouteForDiscount] = useState(null);
+  const [showFirstClassModal, setShowFirstClassModal] = useState(false);
+  const [editingRouteForFC, setEditingRouteForFC] = useState<any>(null);
+  const [fcForm, setFcForm] = useState<any>({
+    first_class_enabled: false,
+    first_class_adult_price: "",
+    first_class_student_price: "",
+    first_class_child_price: "",
+    first_class_infant_price: "",
+    first_class_discount_enabled: false,
+    first_class_discount_adult_price: "",
+    first_class_discount_student_price: "",
+    first_class_discount_child_price: "",
+    first_class_discount_infant_price: "",
+  });
 
   // Service Type Form
   const [serviceTypeForm, setServiceTypeForm] = useState({
@@ -1004,6 +1018,54 @@ export default function AdminConfig() {
     }
   };
 
+  // First Class Modal handlers
+  const openFirstClassModal = (route: any) => {
+    setEditingRouteForFC(route);
+    setFcForm({
+      first_class_enabled: !!route.first_class_enabled,
+      first_class_adult_price: route.first_class_adult_price ? parseFloat(route.first_class_adult_price).toFixed(2) : "",
+      first_class_student_price: route.first_class_student_price ? parseFloat(route.first_class_student_price).toFixed(2) : "",
+      first_class_child_price: route.first_class_child_price ? parseFloat(route.first_class_child_price).toFixed(2) : "",
+      first_class_infant_price: route.first_class_infant_price ? parseFloat(route.first_class_infant_price).toFixed(2) : "",
+      first_class_discount_enabled: !!route.first_class_discount_enabled,
+      first_class_discount_adult_price: route.first_class_discount_adult_price ? parseFloat(route.first_class_discount_adult_price).toFixed(2) : "",
+      first_class_discount_student_price: route.first_class_discount_student_price ? parseFloat(route.first_class_discount_student_price).toFixed(2) : "",
+      first_class_discount_child_price: route.first_class_discount_child_price ? parseFloat(route.first_class_discount_child_price).toFixed(2) : "",
+      first_class_discount_infant_price: route.first_class_discount_infant_price ? parseFloat(route.first_class_discount_infant_price).toFixed(2) : "",
+    });
+    setShowFirstClassModal(true);
+  };
+
+  const closeFirstClassModal = () => {
+    setShowFirstClassModal(false);
+    setEditingRouteForFC(null);
+  };
+
+  const handleFirstClassSubmit = async () => {
+    if (!editingRouteForFC) return;
+    try {
+      const num = (v: any) => parseFloat(v) || 0;
+      const payload = {
+        first_class_enabled: !!fcForm.first_class_enabled,
+        first_class_adult_price: fcForm.first_class_enabled ? num(fcForm.first_class_adult_price) : 0,
+        first_class_student_price: fcForm.first_class_enabled ? num(fcForm.first_class_student_price) : 0,
+        first_class_child_price: fcForm.first_class_enabled ? num(fcForm.first_class_child_price) : 0,
+        first_class_infant_price: fcForm.first_class_enabled ? num(fcForm.first_class_infant_price) : 0,
+        first_class_discount_enabled: !!fcForm.first_class_enabled && !!fcForm.first_class_discount_enabled,
+        first_class_discount_adult_price: fcForm.first_class_discount_enabled ? num(fcForm.first_class_discount_adult_price) : 0,
+        first_class_discount_student_price: fcForm.first_class_discount_enabled ? num(fcForm.first_class_discount_student_price) : 0,
+        first_class_discount_child_price: fcForm.first_class_discount_enabled ? num(fcForm.first_class_discount_child_price) : 0,
+        first_class_discount_infant_price: fcForm.first_class_discount_enabled ? num(fcForm.first_class_discount_infant_price) : 0,
+      };
+      await Services.updateRouteFirstClass(editingRouteForFC.id, payload);
+      showMessage(fcForm.first_class_enabled ? "First Class pricing saved!" : "First Class disabled!");
+      closeFirstClassModal();
+      loadData();
+    } catch (error: any) {
+      showMessage(`Error: ${error.message}`, true);
+    }
+  };
+
   // Helper function to get current effective price and check if discount is meaningful
   const getEffectivePrice = (route, priceType) => {
     const originalPrice = parseFloat(route[`${priceType}_price`]) || 0;
@@ -1531,6 +1593,13 @@ export default function AdminConfig() {
                             title={hasActiveDiscount(route) ? "Edit Discount" : "Add Discount"}
                           >
                             {icons.tag("w-4 h-4")}
+                          </button>
+                          <button
+                            onClick={() => openFirstClassModal(route)}
+                            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors font-bold text-[11px] ${route.first_class_enabled ? "text-sky-700 bg-sky-100 hover:bg-sky-200" : "text-slate-500 bg-slate-100 hover:bg-slate-200"}`}
+                            title={route.first_class_enabled ? "Edit First Class" : "Add First Class"}
+                          >
+                            FC
                           </button>
                           <button
                             onClick={() => deleteRoute(route.id)}
@@ -2743,6 +2812,135 @@ export default function AdminConfig() {
                 className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all duration-300 font-semibold text-sm shadow-lg shadow-amber-500/20"
               >
                 {discountForm.discount_enabled ? "Save Discount Pricing" : "Disable Discount"}
+              </button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
+
+      {/* ==================== FIRST CLASS MODAL ==================== */}
+      {showFirstClassModal && editingRouteForFC && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={closeFirstClassModal} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-scale-in">
+            {/* Header */}
+            <div className="sticky top-0 bg-white rounded-t-2xl px-6 py-4 border-b border-slate-100 flex items-center justify-between z-10">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center mr-3 flex-shrink-0 shadow-lg shadow-sky-500/20">
+                  <span className="text-white text-[11px] font-bold">FC</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">First Class Pricing</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{editingRouteForFC.source} → {editingRouteForFC.destination}</p>
+                </div>
+              </div>
+              <button onClick={closeFirstClassModal} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                {icons.x()}
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              {/* Enable toggle */}
+              <div className="bg-sky-50/60 border border-sky-200/60 rounded-xl p-4 flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Enable First Class tier</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {fcForm.first_class_enabled ? "This route offers First Class pricing in bookings." : "Route only offers Economy."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFcForm({ ...fcForm, first_class_enabled: !fcForm.first_class_enabled })}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${fcForm.first_class_enabled ? "bg-sky-500" : "bg-slate-300"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${fcForm.first_class_enabled ? "translate-x-6" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+
+              {/* FC prices */}
+              {fcForm.first_class_enabled && (
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">First Class Prices (VAT inclusive)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(["adult", "student", "child", "infant"] as const).map((type) => (
+                      <div key={type} className="border border-slate-200 rounded-xl p-3">
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1.5">{type}</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={fcForm[`first_class_${type}_price`]}
+                          onChange={(e) => setFcForm({ ...fcForm, [`first_class_${type}_price`]: e.target.value })}
+                          className="glass-input w-full"
+                          placeholder="0.00"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Economy: FJ${parseFloat(editingRouteForFC[`${type}_price`] || 0).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* FC Discount toggle */}
+              {fcForm.first_class_enabled && (
+                <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800">Enable First Class discount</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {fcForm.first_class_discount_enabled ? "Discounted First Class pricing is active." : "Standard First Class pricing applies."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFcForm({ ...fcForm, first_class_discount_enabled: !fcForm.first_class_discount_enabled })}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${fcForm.first_class_discount_enabled ? "bg-amber-500" : "bg-slate-300"}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${fcForm.first_class_discount_enabled ? "translate-x-6" : "translate-x-0.5"}`} />
+                  </button>
+                </div>
+              )}
+
+              {/* FC Discount prices */}
+              {fcForm.first_class_enabled && fcForm.first_class_discount_enabled && (
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">First Class Discount Prices (VAT inclusive)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(["adult", "student", "child", "infant"] as const).map((type) => {
+                      const fcPrice = parseFloat(fcForm[`first_class_${type}_price`]) || 0;
+                      const discPrice = parseFloat(fcForm[`first_class_discount_${type}_price`]) || 0;
+                      const savings = fcPrice > 0 && discPrice > 0 && discPrice < fcPrice ? fcPrice - discPrice : 0;
+                      return (
+                        <div key={type} className="border border-amber-200 bg-amber-50/20 rounded-xl p-3">
+                          <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1.5">{type}</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={fcForm[`first_class_discount_${type}_price`]}
+                            onChange={(e) => setFcForm({ ...fcForm, [`first_class_discount_${type}_price`]: e.target.value })}
+                            className="glass-input w-full"
+                            placeholder="0.00"
+                          />
+                          {savings > 0 && (
+                            <p className="text-[10px] text-emerald-600 font-semibold mt-1">Save FJ${savings.toFixed(2)}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white rounded-b-2xl px-6 py-4 border-t border-slate-100 flex justify-end gap-3 z-10">
+              <button onClick={closeFirstClassModal} className="btn-secondary">Cancel</button>
+              <button
+                onClick={handleFirstClassSubmit}
+                className="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-xl hover:from-sky-600 hover:to-sky-700 transition-all duration-300 font-semibold text-sm shadow-lg shadow-sky-500/20"
+              >
+                {fcForm.first_class_enabled ? "Save First Class" : "Disable First Class"}
               </button>
             </div>
           </div>

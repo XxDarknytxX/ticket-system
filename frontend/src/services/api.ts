@@ -134,6 +134,9 @@ export const Services = {
 
   // Discount Pricing
   updateRouteDiscount: (id, discountData) => api.put(`/routes/${id}/discount`, discountData),
+
+  // First-class Pricing
+  updateRouteFirstClass: (id: any, data: any) => api.put(`/routes/${id}/first-class`, data),
 };
 
 export const Bookings = {

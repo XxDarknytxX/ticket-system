@@ -403,6 +403,73 @@ export function makeServiceController(pool) {
       }
     },
 
+    // PUT /api/routes/:id/first-class (admin only)
+    updateRouteFirstClass: async (req, res) => {
+      if (req.user.role !== "admin" && req.user.role !== "super_admin") {
+        return send.forbidden(res, "Admin access required");
+      }
+
+      const { id } = req.params;
+      const {
+        first_class_enabled,
+        first_class_adult_price = 0,
+        first_class_student_price = 0,
+        first_class_child_price = 0,
+        first_class_infant_price = 0,
+        first_class_discount_enabled = false,
+        first_class_discount_adult_price = 0,
+        first_class_discount_student_price = 0,
+        first_class_discount_child_price = 0,
+        first_class_discount_infant_price = 0,
+      } = req.body;
+
+      try {
+        const [result] = await db(req).query(
+          `UPDATE routes SET
+            first_class_enabled = ?,
+            first_class_adult_price = ?,
+            first_class_student_price = ?,
+            first_class_child_price = ?,
+            first_class_infant_price = ?,
+            first_class_discount_enabled = ?,
+            first_class_discount_adult_price = ?,
+            first_class_discount_student_price = ?,
+            first_class_discount_child_price = ?,
+            first_class_discount_infant_price = ?
+           WHERE id = ?`,
+          [
+            first_class_enabled ? 1 : 0,
+            first_class_adult_price,
+            first_class_student_price,
+            first_class_child_price,
+            first_class_infant_price,
+            first_class_discount_enabled ? 1 : 0,
+            first_class_discount_adult_price,
+            first_class_discount_student_price,
+            first_class_discount_child_price,
+            first_class_discount_infant_price,
+            id,
+          ]
+        );
+
+        if (result.affectedRows === 0) {
+          return send.notFound(res, "Route not found");
+        }
+
+        const [updated] = await db(req).query(
+          `SELECT r.*, st.name as service_type_name, st.vat_rate
+           FROM routes r JOIN service_types st ON r.service_type_id = st.id
+           WHERE r.id = ?`,
+          [id]
+        );
+
+        return send.ok(res, { route: updated[0] });
+      } catch (e) {
+        console.error(e);
+        return send.serverErr(res);
+      }
+    },
+
     // DELETE /api/routes/:id (admin only)
     deleteRoute: async (req, res) => {
       if (req.user.role !== "admin" && req.user.role !== "super_admin") {

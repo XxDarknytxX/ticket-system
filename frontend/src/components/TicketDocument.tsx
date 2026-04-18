@@ -119,6 +119,14 @@ export default function TicketDocument({ booking }) {
                   {booking?.status}
                 </span>
               </div>
+              {booking?.tier === "first_class" && (
+                <div>
+                  <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Class</div>
+                  <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white bg-sky-600">
+                    First Class
+                  </span>
+                </div>
+              )}
               <div>
                 <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Ticket ID</div>
                 <div className="text-[9pt] font-mono font-normal text-black break-all leading-tight">{booking?.ticket_id}</div>

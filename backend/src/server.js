@@ -90,6 +90,33 @@ try {
             await instPool.query("ALTER TABLE vessels ADD COLUMN status ENUM('active','in_repair','retired') NOT NULL DEFAULT 'active' AFTER description");
             console.log(`Added status column to vessels table (${inst.name})`);
           }
+
+          // Routes: first-class pricing columns
+          const [fcCols] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'routes' AND COLUMN_NAME = 'first_class_enabled'"
+          );
+          if (fcCols[0].c === 0) {
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_enabled BOOLEAN NOT NULL DEFAULT FALSE");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_adult_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_student_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_child_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_infant_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_discount_enabled BOOLEAN NOT NULL DEFAULT FALSE");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_discount_adult_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_discount_student_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_discount_child_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            await instPool.query("ALTER TABLE routes ADD COLUMN first_class_discount_infant_price DECIMAL(10,2) NOT NULL DEFAULT 0");
+            console.log(`Added first-class pricing columns to routes table (${inst.name})`);
+          }
+
+          // Bookings: tier column
+          const [tierCols] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'tier'"
+          );
+          if (tierCols[0].c === 0) {
+            await instPool.query("ALTER TABLE bookings ADD COLUMN tier ENUM('economy','first_class') NOT NULL DEFAULT 'economy' AFTER passenger_type");
+            console.log(`Added tier column to bookings table (${inst.name})`);
+          }
         } catch (instErr) {
           console.error(`Migration error for instance ${inst.name}:`, instErr.message);
         }

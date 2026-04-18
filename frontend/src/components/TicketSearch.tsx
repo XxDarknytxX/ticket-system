@@ -749,6 +749,7 @@ function TicketDetailModal({ ticket, isOpen, onClose }) {
                   <div className="mt-0.5">{getPassengerTypeBadge(ticket.passenger_type)}</div>
                 </div>
                 <InfoField label="Booking Type" value={(ticket.booking_type?.replace('_', ' ') || 'one way').replace(/\b\w/g, c => c.toUpperCase())} />
+                <InfoField label="Class" value={ticket.tier === "first_class" ? "First Class" : "Economy"} />
               </div>
             </div>
 
