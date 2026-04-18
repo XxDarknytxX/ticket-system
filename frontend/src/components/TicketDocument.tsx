@@ -193,7 +193,8 @@ export default function TicketDocument({ booking }) {
         {/* Compact mirror of the main pane: every key field so the stub is a self-contained receipt after tear */}
         <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '1.5mm', paddingRight: '1mm' }}>
 
-          {/* ── Route Line ── */}
+          {/* ── Route Line ── Route text is vertically centered in the header
+              against the stacked pills on the right. */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <span className="text-[8pt] font-black text-black tracking-tight truncate">
@@ -206,18 +207,17 @@ export default function TicketDocument({ booking }) {
                 {booking?.destination?.toUpperCase()}
               </span>
             </div>
-            <span
-              className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white flex-shrink-0"
-              style={{ background: '#000000' }}
-            >
-              {bookingTypeLabel}
-            </span>
-          </div>
-
-          <div className="flex justify-end mt-0.5">
-            <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
-              {booking?.tier === "first_class" ? "First Class" : "Economy"}
-            </span>
+            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+              <span
+                className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white"
+                style={{ background: '#000000' }}
+              >
+                {bookingTypeLabel}
+              </span>
+              <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
+                {booking?.tier === "first_class" ? "First Class" : "Economy"}
+              </span>
+            </div>
           </div>
 
           <div className="border-t border-dashed border-black my-0.5" />
