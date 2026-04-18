@@ -191,13 +191,19 @@ export function ticketEmail({ ticket, accent = "#7c3aed" }) {
         </td>
       </tr>
       <tr>
-        <td style="padding:10px 0;${validUntil ? 'border-bottom:1px solid #f1f5f9;' : ''}">
+        <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
           <p style="margin:0;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Ticket ID</p>
           <p style="margin:3px 0 0;font-size:13px;font-weight:600;color:#0f172a;font-family:monospace;">${ticket.ticket_id}</p>
         </td>
-        <td style="padding:10px 0;${validUntil ? 'border-bottom:1px solid #f1f5f9;' : ''}">
+        <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
           <p style="margin:0;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Status</p>
           <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#059669;text-transform:capitalize;">${ticket.status || "Confirmed"}</p>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:10px 0;${validUntil ? 'border-bottom:1px solid #f1f5f9;' : ''}">
+          <p style="margin:0;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Class</p>
+          <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#0f172a;">${ticket.tier === "first_class" ? "First Class" : "Economy"}</p>
         </td>
       </tr>
       ${validUntil ? `

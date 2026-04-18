@@ -206,17 +206,18 @@ export default function TicketDocument({ booking }) {
                 {booking?.destination?.toUpperCase()}
               </span>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <span
-                className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white"
-                style={{ background: '#000000' }}
-              >
-                {bookingTypeLabel}
-              </span>
-              <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
-                {booking?.tier === "first_class" ? "First Class" : "Economy"}
-              </span>
-            </div>
+            <span
+              className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white flex-shrink-0"
+              style={{ background: '#000000' }}
+            >
+              {bookingTypeLabel}
+            </span>
+          </div>
+
+          <div className="flex justify-end mt-0.5">
+            <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
+              {booking?.tier === "first_class" ? "First Class" : "Economy"}
+            </span>
           </div>
 
           <div className="border-t border-dashed border-black my-0.5" />
