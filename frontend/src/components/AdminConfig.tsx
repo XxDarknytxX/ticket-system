@@ -1566,6 +1566,14 @@ export default function AdminConfig() {
                             const effectivePrice = getEffectivePrice(route, p.type);
                             const isDiscounted = hasActiveDiscount(route) && effectivePrice !== originalPrice;
 
+                            // First Class prices
+                            const fcEnabled = !!route.first_class_enabled;
+                            const fcRegular = parseFloat(route[`first_class_${p.type}_price`]) || 0;
+                            const fcDiscountEnabled = !!route.first_class_discount_enabled;
+                            const fcDiscount = parseFloat(route[`first_class_discount_${p.type}_price`]) || 0;
+                            const fcEffective = fcDiscountEnabled && fcDiscount > 0 ? fcDiscount : fcRegular;
+                            const fcIsDiscounted = fcDiscountEnabled && fcDiscount > 0 && fcDiscount < fcRegular;
+
                             return (
                               <div key={p.type} className={`bg-white border border-slate-200 border-l-4 ${p.border} rounded-lg px-2 py-1.5`}>
                                 <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-500 truncate">{p.label}</div>
@@ -1576,6 +1584,19 @@ export default function AdminConfig() {
                                   </>
                                 ) : (
                                   <span className={`text-[12px] font-bold ${p.text}`}>FJ${effectivePrice.toFixed(2)}</span>
+                                )}
+                                {fcEnabled && (
+                                  <div className="flex items-center gap-1 mt-1 pt-1 border-t border-slate-100">
+                                    <span className="text-sky-600 flex-shrink-0">{icons.crown("w-2.5 h-2.5")}</span>
+                                    {fcIsDiscounted ? (
+                                      <div className="flex items-baseline gap-1 min-w-0">
+                                        <span className="text-[8px] text-slate-400 line-through leading-none">FJ${fcRegular.toFixed(2)}</span>
+                                        <span className="text-[10px] font-bold text-sky-700 leading-none">FJ${fcEffective.toFixed(2)}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-sky-700 leading-none">FJ${fcEffective.toFixed(2)}</span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             );
