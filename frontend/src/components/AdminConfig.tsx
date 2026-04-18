@@ -1122,6 +1122,11 @@ export default function AdminConfig() {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5h16.5m-16.5 0a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 013.75 4.5h16.5a2.25 2.25 0 012.25 2.25v4.5a2.25 2.25 0 01-2.25 2.25m-16.5 0v3a2.25 2.25 0 002.25 2.25h12a2.25 2.25 0 002.25-2.25v-3" />
       </svg>
     ),
+    crown: (cls = "w-4 h-4") => (
+      <svg className={cls} fill="currentColor" viewBox="0 0 24 24">
+        <path d="M12 3l2.5 5L20 6l-1.5 9h-13L4 6l5.5 2L12 3zm-6.3 13h12.6l-.3 2H6l-.3-2z" />
+      </svg>
+    ),
     card: (cls = "w-4 h-4") => (
       <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -1596,10 +1601,10 @@ export default function AdminConfig() {
                           </button>
                           <button
                             onClick={() => openFirstClassModal(route)}
-                            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors font-bold text-[11px] ${route.first_class_enabled ? "text-sky-700 bg-sky-100 hover:bg-sky-200" : "text-slate-500 bg-slate-100 hover:bg-slate-200"}`}
+                            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${route.first_class_enabled ? "text-sky-700 bg-sky-100 hover:bg-sky-200" : "text-slate-500 bg-slate-100 hover:bg-slate-200"}`}
                             title={route.first_class_enabled ? "Edit First Class" : "Add First Class"}
                           >
-                            FC
+                            {icons.crown("w-4 h-4")}
                           </button>
                           <button
                             onClick={() => deleteRoute(route.id)}
@@ -2826,8 +2831,8 @@ export default function AdminConfig() {
             {/* Header */}
             <div className="sticky top-0 bg-white rounded-t-2xl px-6 py-4 border-b border-slate-100 flex items-center justify-between z-10">
               <div className="flex items-center">
-                <div className="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center mr-3 flex-shrink-0 shadow-lg shadow-sky-500/20">
-                  <span className="text-white text-[11px] font-bold">FC</span>
+                <div className="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center mr-3 flex-shrink-0 shadow-lg shadow-sky-500/20 text-white">
+                  {icons.crown("w-5 h-5")}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">First Class Pricing</h3>
@@ -2852,9 +2857,9 @@ export default function AdminConfig() {
                 <button
                   type="button"
                   onClick={() => setFcForm({ ...fcForm, first_class_enabled: !fcForm.first_class_enabled })}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${fcForm.first_class_enabled ? "bg-sky-500" : "bg-slate-300"}`}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 ${fcForm.first_class_enabled ? "bg-sky-500" : "bg-slate-300"}`}
                 >
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${fcForm.first_class_enabled ? "translate-x-6" : "translate-x-0.5"}`} />
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${fcForm.first_class_enabled ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
 
@@ -2894,9 +2899,9 @@ export default function AdminConfig() {
                   <button
                     type="button"
                     onClick={() => setFcForm({ ...fcForm, first_class_discount_enabled: !fcForm.first_class_discount_enabled })}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${fcForm.first_class_discount_enabled ? "bg-amber-500" : "bg-slate-300"}`}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 ${fcForm.first_class_discount_enabled ? "bg-amber-500" : "bg-slate-300"}`}
                   >
-                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${fcForm.first_class_discount_enabled ? "translate-x-6" : "translate-x-0.5"}`} />
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${fcForm.first_class_discount_enabled ? "translate-x-6" : "translate-x-1"}`} />
                   </button>
                 </div>
               )}
