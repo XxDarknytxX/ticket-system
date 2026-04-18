@@ -1472,11 +1472,6 @@ export default function AgentBooking() {
                   Route Preview
                 </h3>
                 <div className="flex items-center gap-1.5">
-                  {!!selectedRoute.first_class_enabled && (
-                    <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${selectedTier === "first_class" ? "bg-sky-100 text-sky-700 border-sky-200" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
-                      {selectedTier === "first_class" ? "First Class" : "Economy"}
-                    </span>
-                  )}
                   {!!selectedRoute.discount_enabled && (
                     <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200">
                       Discount Active
