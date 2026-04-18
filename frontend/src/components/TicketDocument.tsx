@@ -74,6 +74,11 @@ export default function TicketDocument({ booking }) {
               >
                 {bookingTypeLabel}
               </span>
+              <span
+                className="text-[6.5pt] font-black uppercase px-1.5 py-0.5 rounded border border-black text-black whitespace-nowrap"
+              >
+                {booking?.tier === "first_class" ? "First Class" : "Economy"}
+              </span>
             </div>
           </div>
 
@@ -117,12 +122,6 @@ export default function TicketDocument({ booking }) {
                 <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Status</div>
                 <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white" style={{ backgroundColor: statusColor() }}>
                   {booking?.status}
-                </span>
-              </div>
-              <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Class</div>
-                <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white bg-black">
-                  {booking?.tier === "first_class" ? "First Class" : "Economy"}
                 </span>
               </div>
               <div>
@@ -207,12 +206,17 @@ export default function TicketDocument({ booking }) {
                 {booking?.destination?.toUpperCase()}
               </span>
             </div>
-            <span
-              className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white flex-shrink-0"
-              style={{ background: '#000000' }}
-            >
-              {bookingTypeLabel}
-            </span>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span
+                className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white"
+                style={{ background: '#000000' }}
+              >
+                {bookingTypeLabel}
+              </span>
+              <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
+                {booking?.tier === "first_class" ? "First Class" : "Economy"}
+              </span>
+            </div>
           </div>
 
           <div className="border-t border-dashed border-black my-0.5" />
@@ -256,12 +260,6 @@ export default function TicketDocument({ booking }) {
                 <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
                 <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none" style={{ backgroundColor: statusColor() }}>
                   {booking?.status}
-                </span>
-              </div>
-              <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Class</div>
-                <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none bg-black">
-                  {booking?.tier === "first_class" ? "First Class" : "Economy"}
                 </span>
               </div>
             </div>
