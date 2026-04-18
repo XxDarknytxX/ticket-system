@@ -1016,7 +1016,7 @@ export default function AgentBooking() {
           </div>
 
           {/* Tier selector — only shown when route has first-class pricing enabled */}
-          {selectedRoute?.first_class_enabled && (
+          {!!selectedRoute?.first_class_enabled && (
             <div className="space-y-1.5 animate-fade-in-up delay-150">
               <label className="block text-sm font-medium text-slate-700">Travel Class</label>
               <div className="grid grid-cols-2 gap-2">
@@ -1376,7 +1376,7 @@ export default function AgentBooking() {
                   Route Preview
                 </h3>
                 <div className="flex items-center gap-1.5">
-                  {selectedRoute.first_class_enabled && (
+                  {!!selectedRoute.first_class_enabled && (
                     <span className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${selectedTier === "first_class" ? "bg-sky-100 text-sky-700 border-sky-200" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
                       {selectedTier === "first_class" ? "First Class" : "Economy"}
                     </span>
