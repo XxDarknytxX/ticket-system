@@ -10,8 +10,22 @@ const base = {
   password: unquote(process.env.DATABASE_PASSWORD),
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // Force UTC on the driver side so TIMESTAMP values are consistently treated
+  // as UTC regardless of the server's OS timezone. Browsers will convert to
+  // the user's local time for display.
+  timezone: "Z",
 };
+
+// Wrap pool creation: every new connection in the pool runs SET time_zone = '+00:00'
+// so MySQL's CURRENT_TIMESTAMP / NOW() also write UTC, matching the driver tz.
+function createPoolUTC(opts) {
+  const pool = mysql.createPool(opts);
+  pool.on("connection", (conn) => {
+    conn.query("SET time_zone = '+00:00'").catch(() => { /* ignore — MySQL may not support this in some modes */ });
+  });
+  return pool;
+}
 
 /**
  * Instance-specific tables — every instance DB gets ALL of these.
@@ -225,7 +239,7 @@ class PoolManager {
       `CREATE DATABASE IF NOT EXISTS \`${this.sharedDbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
     );
     await conn.end();
-    this.sharedPool = mysql.createPool({ ...base, database: this.sharedDbName });
+    this.sharedPool = createPoolUTC({ ...base, database: this.sharedDbName });
 
     // Ensure shared-only tables exist
     await this.sharedPool.query(`
@@ -280,7 +294,7 @@ class PoolManager {
     const info = await this.getInstanceInfo(instanceName);
     if (!info) throw new Error(`Instance '${instanceName}' not found`);
 
-    const pool = mysql.createPool({ ...base, database: info.db_name });
+    const pool = createPoolUTC({ ...base, database: info.db_name });
     this.instancePools.set(instanceName, pool);
     return pool;
   }
@@ -292,7 +306,7 @@ class PoolManager {
     );
     await conn.end();
 
-    const pool = mysql.createPool({ ...base, database: dbName });
+    const pool = createPoolUTC({ ...base, database: dbName });
     const statements = INSTANCE_SCHEMA.split(";").map(s => s.trim()).filter(Boolean);
     for (const stmt of statements) {
       await pool.query(stmt);
