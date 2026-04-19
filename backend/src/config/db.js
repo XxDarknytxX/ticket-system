@@ -19,10 +19,12 @@ const base = {
 
 // Wrap pool creation: every new connection in the pool runs SET time_zone = '+00:00'
 // so MySQL's CURRENT_TIMESTAMP / NOW() also write UTC, matching the driver tz.
+// NOTE: the promise pool's 'connection' event hands back the RAW (callback-style)
+// connection, so we use the callback form here — not .catch() on a promise.
 function createPoolUTC(opts) {
   const pool = mysql.createPool(opts);
   pool.on("connection", (conn) => {
-    conn.query("SET time_zone = '+00:00'").catch(() => { /* ignore — MySQL may not support this in some modes */ });
+    conn.query("SET time_zone = '+00:00'", () => { /* ignore failures */ });
   });
   return pool;
 }
