@@ -22,6 +22,7 @@ import {
   Key,
   ShieldCheck,
   Database,
+  CalendarDays,
 } from "lucide-react";
 
 /* ─── Brand Ship SVG ─── */
@@ -41,7 +42,7 @@ const allNavItems = {
   reports: { label: "Reports", to: "/reports", icon: BarChart3, perm: "reports" },
   scanner: { label: "Scanner", to: "/scanner", icon: QrCode, perm: "scanner" },
   scanHistory: { label: "Scan History", to: "/scan-history", icon: ClipboardList, perm: "scan_history" },
-  manifest: { label: "Manifest", to: "/manifest", icon: ClipboardList, perm: "manifest_view" },
+  manifest: { label: "Manifest", to: "/manifest", icon: CalendarDays, perm: "manifest_view" },
   configuration: { label: "Configuration", to: "/configuration", icon: Settings, perm: "configuration" },
   users: { label: "Users", to: "/users", icon: Users, perm: "users" },
   teams: { label: "Teams", to: "/teams", icon: UsersRound, perm: "teams" },

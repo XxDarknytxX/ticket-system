@@ -206,23 +206,32 @@ export function makeManifestController(pool) {
     },
 
     // GET /api/departures/:id/manifest — literal manifest
+    // Includes:
+    //   1) bookings explicitly tied to this departure (departure_id = id)
+    //   2) "orphan" bookings on the same route + same travel_date that have NO departure_id
+    //      (so the manifest still picks them up when no slot was selected during booking)
     getLiteralManifest: async (req, res) => {
       const { id } = req.params;
       try {
         const [depRows] = await db(req).query(`${departureSelect} WHERE d.id = ?`, [id]);
         if (depRows.length === 0) return send.notFound(res, "Departure not found");
+        const dep = depRows[0];
         const [bookings] = await db(req).query(
           `SELECT
              b.id, b.ticket_id, b.passenger_type, b.tier, b.status, b.total_price,
-             b.travel_date, b.boarded_at, b.passenger_gender,
+             b.travel_date, b.boarded_at, b.passenger_gender, b.departure_id,
              c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone
            FROM bookings b
            JOIN customers c ON b.customer_id = c.id
-           WHERE b.departure_id = ? AND b.status != 'cancelled'
+           WHERE b.status != 'cancelled'
+             AND (
+               b.departure_id = ?
+               OR (b.departure_id IS NULL AND b.route_id = ? AND b.travel_date = ?)
+             )
            ORDER BY b.status DESC, b.created_at ASC`,
-          [id]
+          [id, dep.route_id, dep.departure_date]
         );
-        return send.ok(res, { departure: depRows[0], bookings });
+        return send.ok(res, { departure: dep, bookings });
       } catch (e) {
         console.error(e);
         return send.serverErr(res);

@@ -15,6 +15,10 @@ const base = {
   // as UTC regardless of the server's OS timezone. Browsers will convert to
   // the user's local time for display.
   timezone: "Z",
+  // Return DATE columns as YYYY-MM-DD strings (not Date objects) so they don't
+  // get serialized as ISO timestamps with a timezone shift. DATETIME/TIMESTAMP
+  // remain as Date objects (handled correctly by Z timezone above).
+  dateStrings: ["DATE"],
 };
 
 // Wrap pool creation: every new connection in the pool runs SET time_zone = '+00:00'

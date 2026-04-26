@@ -30,7 +30,18 @@ interface Departure {
   boarded_count: number;
 }
 
-const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
+// Robust YYYY-MM-DD extraction — handles both "2026-04-19" and "2026-04-19T00:00:00.000Z"
+const toYMD = (d: any): string => {
+  if (!d) return "";
+  const s = String(d);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+};
+const fmtDate = (d: any) => {
+  const ymd = toYMD(d);
+  if (!ymd) return "";
+  const dt = new Date(ymd + "T00:00:00");
+  return isNaN(dt.getTime()) ? ymd : dt.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+};
 const fmtTime = (t: string) => t ? t.slice(0, 5) : "";
 const today = () => new Date().toISOString().slice(0, 10);
 const inDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -152,7 +163,7 @@ function ScheduleTab() {
     if (filterRoute) params.route_id = filterRoute;
     if (filterVessel) params.vessel_id = filterVessel;
     ManifestApi.listDepartures(params)
-      .then((d: any) => setDepartures(d.departures || []))
+      .then((d: any) => setDepartures((d.departures || []).map((x: any) => ({ ...x, departure_date: toYMD(x.departure_date) }))))
       .catch(() => setDepartures([]))
       .finally(() => setLoading(false));
   };
@@ -331,7 +342,7 @@ function SingleDepartureModal({ editing, routes, vessels, onClose, onSaved }: an
   const [form, setForm] = useState({
     route_id: editing?.route_id || "",
     vessel_id: editing?.vessel_id || "",
-    departure_date: editing?.departure_date || today(),
+    departure_date: editing?.departure_date ? toYMD(editing.departure_date) : today(),
     departure_time: editing?.departure_time?.slice(0,5) || "08:00",
     notes: editing?.notes || "",
   });
@@ -627,7 +638,7 @@ function ManifestTab({ canEdit }: { canEdit: boolean }) {
     const to = new Date(); to.setDate(to.getDate() + 60);
     ManifestApi.listDepartures({ date_from: from.toISOString().slice(0, 10), date_to: to.toISOString().slice(0, 10) })
       .then((d: any) => {
-        const list = d.departures || [];
+        const list = (d.departures || []).map((x: any) => ({ ...x, departure_date: toYMD(x.departure_date) }));
         setDepartures(list);
         if (list.length > 0 && !selectedId) {
           // pick the soonest upcoming departure (or the latest past if none upcoming)

@@ -632,6 +632,22 @@ export function makeBookingController(pool) {
           paymentMethodCode = pmRows[0].code;
         }
 
+        // Auto-link a scheduled departure if one wasn't explicitly picked.
+        // We only auto-link when there's exactly one scheduled departure on this
+        // route + travel date — if multiple match, leave it null so the booker can
+        // pick later, and the projected manifest still surfaces the passenger.
+        let resolvedDepartureId = departureIdValue;
+        if (resolvedDepartureId == null) {
+          const [matches] = await db(req).query(
+            `SELECT id FROM departures
+             WHERE route_id = ? AND departure_date = ? AND status = 'scheduled'`,
+            [route_id, travel_date]
+          );
+          if (matches.length === 1) {
+            resolvedDepartureId = matches[0].id;
+          }
+        }
+
         const [bookingResult] = await db(req).query(
           `INSERT INTO bookings (
             ticket_id, customer_id, route_id, vessel_id, departure_id, booking_type, passenger_type, tier, passenger_gender,
@@ -642,7 +658,7 @@ export function makeBookingController(pool) {
             customerId,
             route_id,
             vessel_id || null,
-            departureIdValue,
+            resolvedDepartureId,
             booking_type,
             passenger_type,
             effectiveTier,
