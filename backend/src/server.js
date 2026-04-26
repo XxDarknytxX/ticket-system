@@ -6,6 +6,7 @@ import { instanceMiddleware } from "./middleware/instance.js";
 import { makeAdminController } from "./controllers/adminController.js";
 import { makeServiceController } from "./controllers/serviceController.js";
 import { makeBookingController } from "./controllers/bookingController.js";
+import { makeManifestController } from "./controllers/manifestController.js";
 import { makeScanController } from "./controllers/scanController.js";
 import { makeSettingsController } from "./controllers/settingsController.js";
 import { makeTicketLayoutController } from "./controllers/ticketLayoutController.js";
@@ -14,6 +15,7 @@ import { makeInstanceController } from "./controllers/instanceController.js";
 import { makeAuthRouter } from "./routes/auth.js";
 import { makeServiceRouter } from "./routes/services.js";
 import { makeBookingRouter } from "./routes/bookings.js";
+import { makeManifestRouter } from "./routes/manifest.js";
 import { makeScanRouter } from "./routes/scans.js";
 import { makeSettingsRouter } from "./routes/settings.js";
 import { makeLayoutRouter } from "./routes/layouts.js";
@@ -117,6 +119,65 @@ try {
             await instPool.query("ALTER TABLE bookings ADD COLUMN tier ENUM('economy','first_class') NOT NULL DEFAULT 'economy' AFTER passenger_type");
             console.log(`Added tier column to bookings table (${inst.name})`);
           }
+
+          // Departures table (manifest feature)
+          const [depTables] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'departures'"
+          );
+          if (depTables[0].c === 0) {
+            await instPool.query(`
+              CREATE TABLE departures (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                route_id INT NOT NULL,
+                vessel_id INT NOT NULL,
+                departure_date DATE NOT NULL,
+                departure_time TIME NOT NULL,
+                status ENUM('scheduled','cancelled','departed','completed') NOT NULL DEFAULT 'scheduled',
+                actual_departure_time TIMESTAMP NULL,
+                completed_at TIMESTAMP NULL,
+                completed_by INT NULL,
+                notes VARCHAR(255) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+                FOREIGN KEY (vessel_id) REFERENCES vessels(id) ON DELETE CASCADE,
+                FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL,
+                UNIQUE KEY unique_departure (route_id, vessel_id, departure_date, departure_time),
+                INDEX idx_departures_date (departure_date),
+                INDEX idx_departures_route_date (route_id, departure_date)
+              )
+            `);
+            console.log(`Created departures table (${inst.name})`);
+          }
+
+          // Bookings: departure_id column
+          const [depCols] = await instPool.query(
+            "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'departure_id'"
+          );
+          if (depCols[0].c === 0) {
+            await instPool.query("ALTER TABLE bookings ADD COLUMN departure_id INT NULL AFTER vessel_id");
+            // FK is best-effort: skip silently if it can't be added (e.g. vessel_id index ordering)
+            try {
+              await instPool.query("ALTER TABLE bookings ADD CONSTRAINT fk_bookings_departure FOREIGN KEY (departure_id) REFERENCES departures(id) ON DELETE SET NULL");
+            } catch (fkErr) {
+              console.warn(`departure_id FK not added (${inst.name}):`, fkErr.message);
+            }
+            console.log(`Added departure_id column to bookings (${inst.name})`);
+          }
+
+          // Seed default permissions for new manifest perms (DB-driven)
+          for (const role of ['admin']) {
+            for (const perm of ['schedule_edit', 'manifest_view']) {
+              await instPool.query(
+                "INSERT IGNORE INTO role_permissions (role_name, permission, granted) VALUES (?, ?, TRUE)",
+                [role, perm]
+              );
+            }
+          }
+          // Dock gets only manifest_view by default
+          await instPool.query(
+            "INSERT IGNORE INTO role_permissions (role_name, permission, granted) VALUES ('dock', 'manifest_view', TRUE)"
+          );
         } catch (instErr) {
           console.error(`Migration error for instance ${inst.name}:`, instErr.message);
         }
@@ -153,6 +214,7 @@ try {
 const adminController = makeAdminController(sharedPool);
 const serviceController = makeServiceController(sharedPool);
 const bookingController = makeBookingController(sharedPool);
+const manifestController = makeManifestController(sharedPool);
 const scanController = makeScanController(sharedPool);
 const settingsController = makeSettingsController(sharedPool);
 const ticketLayoutController = makeTicketLayoutController(sharedPool);
@@ -182,6 +244,7 @@ function mountInstanceRoutes(prefix) {
   router.use(makeAuthRouter(adminController, sharedPool));
   router.use(makeServiceRouter(serviceController));
   router.use(makeBookingRouter(bookingController, sharedPool));
+  router.use(makeManifestRouter(manifestController, sharedPool));
   router.use(makeScanRouter(scanController, sharedPool));
   router.use(makeLayoutRouter(ticketLayoutController));
   router.use(makePaymentMethodRouter(paymentMethodController));

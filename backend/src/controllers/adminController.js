@@ -651,11 +651,11 @@ export function makeAdminController(pool) {
 
     getPermissions: async (req, res) => {
       try {
-        const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"];
+        const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview", "schedule_edit", "manifest_view"];
         const defaultPerms = {
-          admin: ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview"],
+          admin: ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "license_overview", "schedule_edit", "manifest_view"],
           agent: ["dashboard", "booking", "ticket_search"],
-          dock: ["scanner"],
+          dock: ["scanner", "manifest_view"],
         };
         const builtIn = ["super_admin", "admin", "agent", "dock"];
 
@@ -700,7 +700,7 @@ export function makeAdminController(pool) {
       if (["super_admin", "admin", "agent", "dock"].includes(name)) return send.bad(res, "Cannot create a role with a built-in name");
       try {
         // Create permission entries for this role
-        const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams"];
+        const allPerms = ["dashboard", "booking", "ticket_search", "reports", "scanner", "scan_history", "configuration", "users", "teams", "schedule_edit", "manifest_view"];
         const values = allPerms.map(p => [name, p, permissions?.[p] ? true : false]);
         await db(req).query("DELETE FROM role_permissions WHERE role_name = ?", [name]);
         for (const v of values) {

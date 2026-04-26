@@ -142,6 +142,32 @@ CREATE TABLE IF NOT EXISTS routes (
 );
 
 -- ============================================================================
+-- DEPARTURES (Manifest / Schedule)
+-- ============================================================================
+
+-- One row per specific dated departure (route + vessel + date + time)
+CREATE TABLE IF NOT EXISTS departures (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  route_id INT NOT NULL,
+  vessel_id INT NOT NULL,
+  departure_date DATE NOT NULL,
+  departure_time TIME NOT NULL,
+  status ENUM('scheduled','cancelled','departed','completed') NOT NULL DEFAULT 'scheduled',
+  actual_departure_time TIMESTAMP NULL,
+  completed_at TIMESTAMP NULL,
+  completed_by INT NULL,
+  notes VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  FOREIGN KEY (vessel_id) REFERENCES vessels(id) ON DELETE CASCADE,
+  FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE KEY unique_departure (route_id, vessel_id, departure_date, departure_time),
+  INDEX idx_departures_date (departure_date),
+  INDEX idx_departures_route_date (route_id, departure_date)
+);
+
+-- ============================================================================
 -- CUSTOMER MANAGEMENT
 -- ============================================================================
 
@@ -172,6 +198,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_id INT NOT NULL,
   route_id INT NOT NULL,
   vessel_id INT NULL,
+  departure_id INT NULL,
 
   -- Booking Details
   booking_type ENUM('one_way', 'return', 'multi') NOT NULL DEFAULT 'one_way',

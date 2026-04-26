@@ -41,6 +41,7 @@ const allNavItems = {
   reports: { label: "Reports", to: "/reports", icon: BarChart3, perm: "reports" },
   scanner: { label: "Scanner", to: "/scanner", icon: QrCode, perm: "scanner" },
   scanHistory: { label: "Scan History", to: "/scan-history", icon: ClipboardList, perm: "scan_history" },
+  manifest: { label: "Manifest", to: "/manifest", icon: ClipboardList, perm: "manifest_view" },
   configuration: { label: "Configuration", to: "/configuration", icon: Settings, perm: "configuration" },
   users: { label: "Users", to: "/users", icon: Users, perm: "users" },
   teams: { label: "Teams", to: "/teams", icon: UsersRound, perm: "teams" },
@@ -62,7 +63,7 @@ function getNavSections(role: string, permissions: Record<string, boolean>) {
 
   const isSuperAdmin = role === "super_admin";
   const main = [allNavItems.dashboard, allNavItems.booking].filter(i => has(i.perm));
-  const ops = [allNavItems.tickets, allNavItems.reports, allNavItems.scanner].filter(i => has(i.perm));
+  const ops = [allNavItems.tickets, allNavItems.reports, allNavItems.scanner, allNavItems.manifest].filter(i => has(i.perm));
   const adminItems = [allNavItems.configuration, allNavItems.users, allNavItems.teams, allNavItems.scanHistory].filter(i => has(i.perm));
   // License overview shown if the user has that permission
   if (has("license_overview")) adminItems.push(allNavItems.licenseOverview);
@@ -86,6 +87,7 @@ const breadcrumbMap: Record<string, string> = {
   "/reports": "Reports",
   "/scanner": "Scanner",
   "/scan-history": "Scan History",
+  "/manifest": "Manifest",
   "/configuration": "Configuration",
   "/users": "Users",
   "/teams": "Teams",

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useReactToPrint } from "react-to-print";
-import { Services, Bookings, PaymentMethods } from "../services/api";
+import { Services, Bookings, PaymentMethods, Manifest } from "../services/api";
 import TicketDocument from "./TicketDocument";
 
 export default function AgentBooking() {
@@ -24,6 +24,10 @@ export default function AgentBooking() {
   const [selectedReturnTier, setSelectedReturnTier] = useState<"economy" | "first_class">("economy");
   const [selectedVessel, setSelectedVessel] = useState(null);
   const [selectedReturnVessel, setSelectedReturnVessel] = useState(null);
+  const [outboundSlots, setOutboundSlots] = useState<any[]>([]);
+  const [returnSlots, setReturnSlots] = useState<any[]>([]);
+  const [selectedOutboundSlot, setSelectedOutboundSlot] = useState<number | null>(null);
+  const [selectedReturnSlot, setSelectedReturnSlot] = useState<number | null>(null);
   const [bookingType, setBookingType] = useState("one_way");
   const [travelDate, setTravelDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
@@ -162,6 +166,26 @@ export default function AgentBooking() {
     };
     loadRoutes();
   }, [selectedServiceType]);
+
+  // Load outbound departure slots when route + travel_date change
+  useEffect(() => {
+    if (!selectedRoute || !travelDate) { setOutboundSlots([]); setSelectedOutboundSlot(null); return; }
+    Manifest.listDepartures({ route_id: selectedRoute.id, date_from: travelDate, date_to: travelDate, status: "scheduled" })
+      .then((d: any) => setOutboundSlots(d.departures || []))
+      .catch(() => setOutboundSlots([]));
+  }, [selectedRoute, travelDate]);
+
+  // Load return slots when reverse route + return_date change
+  useEffect(() => {
+    if (bookingType !== "return" || !returnDate || !selectedRoute) {
+      setReturnSlots([]); setSelectedReturnSlot(null); return;
+    }
+    const reverse = routes.find((r) => r.source === selectedRoute.destination && r.destination === selectedRoute.source);
+    if (!reverse) { setReturnSlots([]); setSelectedReturnSlot(null); return; }
+    Manifest.listDepartures({ route_id: reverse.id, date_from: returnDate, date_to: returnDate, status: "scheduled" })
+      .then((d: any) => setReturnSlots(d.departures || []))
+      .catch(() => setReturnSlots([]));
+  }, [bookingType, returnDate, selectedRoute, routes]);
 
   /* ═══════════════════════ PRICING HELPERS ═══════════════════════ */
   // Resolve tier for a given route — if tier isn't explicitly requested, use selectedTier
@@ -560,6 +584,7 @@ export default function AgentBooking() {
             customer_gender: passenger.gender || null,
             route_id: selectedRoute.id,
             vessel_id: selectedVessel.id,
+            departure_id: selectedOutboundSlot || undefined,
             passenger_type: passenger.passengerType,
             tier: outboundTier,
             notes: notes || undefined,
@@ -587,6 +612,7 @@ export default function AgentBooking() {
               travel_date: returnDate,
               vessel_id: selectedReturnVessel.id,
               route_id: reverseRoute.id,
+              departure_id: selectedReturnSlot || undefined,
               tier: returnTier,
             };
             const returnResponse = await Bookings.createBooking(returnPayload);
@@ -722,6 +748,45 @@ export default function AgentBooking() {
       </div>
     </div>
   );
+
+  /* ═══════════════════════ SLOT PICKER (departure slot) ═══════════════════════ */
+  const SlotPicker = ({ label, slots, value, onChange }: any) => {
+    const slotPill = (booked: number, cap: number) => {
+      const pct = cap > 0 ? (booked / cap) * 100 : 0;
+      if (pct >= 100) return "bg-rose-100 text-rose-700";
+      if (pct >= 80) return "bg-amber-100 text-amber-700";
+      return "bg-emerald-100 text-emerald-700";
+    };
+    return (
+      <div className="space-y-1.5 animate-fade-in-up">
+        <label className="block text-sm font-medium text-slate-700">{label}</label>
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value ? parseInt(e.target.value, 10) : null)}
+          className="w-full glass-select text-sm"
+        >
+          <option value="">No specific slot</option>
+          {slots.map((s: any) => (
+            <option key={s.id} value={s.id}>
+              {s.departure_time?.slice(0,5)} — {s.vessel_name} ({s.booked_count}/{s.seat_capacity})
+            </option>
+          ))}
+        </select>
+        {value && (() => {
+          const slot = slots.find((s: any) => s.id === value);
+          if (!slot) return null;
+          return (
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>{slot.vessel_name} • {slot.departure_time?.slice(0,5)}</span>
+              <span className={`px-2 py-0.5 rounded-full font-semibold ${slotPill(slot.booked_count, slot.seat_capacity)}`}>
+                {slot.booked_count}/{slot.seat_capacity} booked
+              </span>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 
   /* ═══════════════════════ SEARCHABLE ROUTE SELECT ═══════════════════════ */
   const SearchableRouteSelect = ({ value, onChange, disabled, placeholder, compact }: any) => {
@@ -1013,6 +1078,8 @@ export default function AgentBooking() {
                 setSelectedRoute(route || null);
                 setSelectedTier("economy"); // reset tier on route change
                 setSelectedReturnTier("economy"); // reset return tier too (reverseRoute depends on selectedRoute)
+                setSelectedOutboundSlot(null);
+                setSelectedReturnSlot(null);
               }}
               disabled={!selectedServiceType}
               placeholder="Search routes..."
@@ -1355,6 +1422,28 @@ export default function AgentBooking() {
               </div>
             )}
           </div>
+
+          {/* Departure slot pickers — only render when slots exist for that direction */}
+          {(outboundSlots.length > 0 || (bookingType === "return" && returnSlots.length > 0)) && (
+            <div className={`grid gap-4 ${bookingType === "return" && returnSlots.length > 0 && outboundSlots.length > 0 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+              {outboundSlots.length > 0 && (
+                <SlotPicker
+                  label={bookingType === "return" ? "Outbound Departure Slot" : "Departure Slot"}
+                  slots={outboundSlots}
+                  value={selectedOutboundSlot}
+                  onChange={setSelectedOutboundSlot}
+                />
+              )}
+              {bookingType === "return" && returnSlots.length > 0 && (
+                <SlotPicker
+                  label="Return Departure Slot"
+                  slots={returnSlots}
+                  value={selectedReturnSlot}
+                  onChange={setSelectedReturnSlot}
+                />
+              )}
+            </div>
+          )}
 
           {/* Reverse route indicator */}
           {bookingType === "return" && selectedRoute && (

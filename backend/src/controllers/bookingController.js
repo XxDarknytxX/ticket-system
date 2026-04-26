@@ -470,6 +470,7 @@ export function makeBookingController(pool) {
         customer_gender,
         route_id,
         vessel_id,
+        departure_id,
         booking_type,
         passenger_type,
         travel_date,
@@ -479,6 +480,8 @@ export function makeBookingController(pool) {
         payment_method,
         tier: rawTier,
       } = req.body;
+
+      const departureIdValue = departure_id ? parseInt(departure_id, 10) : null;
 
       const tier = rawTier === "first_class" ? "first_class" : "economy";
 
@@ -631,14 +634,15 @@ export function makeBookingController(pool) {
 
         const [bookingResult] = await db(req).query(
           `INSERT INTO bookings (
-            ticket_id, customer_id, route_id, vessel_id, booking_type, passenger_type, tier, passenger_gender,
+            ticket_id, customer_id, route_id, vessel_id, departure_id, booking_type, passenger_type, tier, passenger_gender,
             base_price, vat_amount, total_price, travel_date, return_date, custom_validity_days, notes, payment_method, qr_code_data, booked_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             ticketId,
             customerId,
             route_id,
             vessel_id || null,
+            departureIdValue,
             booking_type,
             passenger_type,
             effectiveTier,

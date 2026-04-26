@@ -18,6 +18,7 @@ import TwoFactorSetup from "./pages/TwoFactorSetup";
 import TwoFactorVerify from "./pages/TwoFactorVerify";
 import LicensePage from "./pages/LicensePage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import ManifestPage from "./pages/ManifestPage";
 import PermissionGuard, { getFirstPermittedRoute } from "./components/PermissionGuard";
 import { Permissions } from "./services/api";
 
@@ -138,6 +139,7 @@ export default function App() {
           <Route path="/scanner" element={<PermissionGuard permission="scanner"><ScannerPage /></PermissionGuard>} />
           <Route path="/verify/:ticketId" element={<VerifyPage />} />
           <Route path="/scan-history" element={<PermissionGuard permission="scan_history"><ScanHistoryPage /></PermissionGuard>} />
+          <Route path="/manifest" element={<PermissionGuard permission="manifest_view"><ManifestPage /></PermissionGuard>} />
           <Route path="/configuration" element={<PermissionGuard permission="configuration"><ConfigurationPage /></PermissionGuard>} />
           <Route path="/users" element={<PermissionGuard permission="users"><UsersPage /></PermissionGuard>} />
           <Route path="/teams" element={<PermissionGuard permission="teams"><TeamsPage /></PermissionGuard>} />

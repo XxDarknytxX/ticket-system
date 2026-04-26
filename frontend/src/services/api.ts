@@ -181,6 +181,28 @@ export const Scanning = {
   getScanStats: () => api.get("/scans/stats"),
 };
 
+export const Manifest = {
+  listDepartures: (params?: { date_from?: string; date_to?: string; route_id?: any; vessel_id?: any; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") qs.append(k, String(v));
+      });
+    }
+    const query = qs.toString();
+    return api.get(`/departures${query ? "?" + query : ""}`);
+  },
+  getDeparture: (id: any) => api.get(`/departures/${id}`),
+  createDeparture: (data: any) => api.post("/departures", data),
+  bulkCreateDepartures: (data: any) => api.post("/departures/bulk", data),
+  updateDeparture: (id: any, data: any) => api.put(`/departures/${id}`, data),
+  completeDeparture: (id: any, data: any) => api.post(`/departures/${id}/complete`, data),
+  deleteDeparture: (id: any) => api.delete(`/departures/${id}`),
+  getLiteralManifest: (id: any) => api.get(`/departures/${id}/manifest`),
+  getProjectedManifest: (id: any) => api.get(`/departures/${id}/projected`),
+  getTripReport: (id: any) => api.get(`/departures/${id}/report`),
+};
+
 export const Settings = {
   getSettings: () => api.get("/settings"),
   getPublicSettings: () => api.get("/settings/public"),
