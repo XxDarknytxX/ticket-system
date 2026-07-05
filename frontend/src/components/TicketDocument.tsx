@@ -219,18 +219,21 @@ export default function TicketDocument({ booking }) {
         <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '2mm', paddingRight: '1.5mm', paddingTop: '2mm' }}>
 
           {/* ── Route Line ── Route text is vertically centered in the header
-              against the stacked pills on the right. */}
+              against the stacked pills on the right. Source/arrow/destination
+              live in ONE block so text naturally wraps to a second line when
+              the combined string outgrows the stub's narrow left column. */}
           <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className={`${stubRouteSize} font-black text-black tracking-tight ${stubWrapClass}`}>
-                {srcName}
+            <div
+              className={`flex-1 min-w-0 ${stubRouteSize} font-black text-black tracking-tight ${stubWrapClass}`}
+              style={{ overflowWrap: 'anywhere' }}
+            >
+              {srcName}
+              <span className="inline-block align-middle mx-1">
+                <svg className="w-3.5 h-3.5 text-black inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
               </span>
-              <svg className="w-3.5 h-3.5 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-              <span className={`${stubRouteSize} font-black text-black tracking-tight ${stubWrapClass}`}>
-                {dstName}
-              </span>
+              {dstName}
             </div>
             <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
               <span
