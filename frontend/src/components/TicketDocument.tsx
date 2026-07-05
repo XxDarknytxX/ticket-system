@@ -42,8 +42,11 @@ export default function TicketDocument({ booking }) {
     nameLen <= 7  ? 'text-[8pt]' :
     nameLen <= 10 ? 'text-[7pt]' :
                     'text-[6pt]';
-  const routeAllowWrap = nameLen > 13; // wrap onto 2 lines only for extreme cases
-  const wrapClass = routeAllowWrap ? 'whitespace-normal break-words leading-tight' : 'truncate';
+  // Main pane has plenty of room — only wrap for truly extreme names.
+  const mainWrapClass = nameLen > 13 ? 'whitespace-normal break-words leading-tight' : 'truncate';
+  // Stub is narrow — wrap onto 2 lines as soon as names outgrow the smallest
+  // font tier that still comfortably fits on a single line.
+  const stubWrapClass = nameLen > 7 ? 'whitespace-normal break-words leading-none' : 'truncate';
 
   return (
     <div
@@ -73,13 +76,13 @@ export default function TicketDocument({ booking }) {
           {/* ── Route Line ── */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`${mainRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+              <span className={`${mainRouteSize} font-black text-black tracking-tight ${mainWrapClass}`}>
                 {srcName}
               </span>
               <svg className="w-6 h-6 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className={`${mainRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+              <span className={`${mainRouteSize} font-black text-black tracking-tight ${mainWrapClass}`}>
                 {dstName}
               </span>
             </div>
@@ -219,13 +222,13 @@ export default function TicketDocument({ booking }) {
               against the stacked pills on the right. */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className={`${stubRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+              <span className={`${stubRouteSize} font-black text-black tracking-tight ${stubWrapClass}`}>
                 {srcName}
               </span>
               <svg className="w-3.5 h-3.5 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className={`${stubRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+              <span className={`${stubRouteSize} font-black text-black tracking-tight ${stubWrapClass}`}>
                 {dstName}
               </span>
             </div>
