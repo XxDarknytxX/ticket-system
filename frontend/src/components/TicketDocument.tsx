@@ -226,15 +226,19 @@ export default function TicketDocument({ booking }) {
           <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Details + QR ──
-              Single vertical column of details on the left prevents value
-              truncation. QR on the right, larger for reliable scanning. */}
-          <div className="flex-1 flex gap-2 min-h-0 items-stretch">
+              Left: single-column vertical stack of PII details.
+              Right: QR, taller and centered. */}
+          <div className="flex gap-2 min-h-0 items-stretch">
 
             {/* Left: single-column vertical stack, evenly spaced */}
             <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
               <div>
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
                 <div className="font-normal text-black truncate text-[9pt] leading-tight mt-0.5">{booking?.customer_name}</div>
+              </div>
+              <div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
+                <div className="font-normal text-black text-[8pt] leading-tight mt-0.5">{genderLabel || '—'}</div>
               </div>
               <div>
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Travel Date</div>
@@ -248,25 +252,6 @@ export default function TicketDocument({ booking }) {
                   {isReturn ? fmtDate(booking.return_date) : (booking?.vessel_name || '—')}
                 </div>
               </div>
-              <div className="flex items-end gap-3">
-                <div>
-                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
-                  <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
-                    {booking?.passenger_type || 'Adult'}
-                  </span>
-                </div>
-                <div>
-                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
-                  <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
-                    {booking?.status}
-                  </span>
-                </div>
-              </div>
-              {genderLabel && (
-                <div className="text-[7pt] text-black leading-tight">
-                  <span className="font-bold uppercase tracking-wider text-[6.5pt]">Gender:</span> {genderLabel}
-                </div>
-              )}
             </div>
 
             {/* Right: QR Code — bigger for reliable scanning */}
@@ -281,18 +266,35 @@ export default function TicketDocument({ booking }) {
             </div>
           </div>
 
-          {/* ── Ticket ID + Valid Until ── */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="min-w-0 flex-1">
+          {/* ── Type + Status + Ticket ID + Valid Until ──
+              These sit BELOW the QR row so they get the full stub width and
+              never get truncated. Type/Status pills on the left, Ticket ID
+              & Valid Until stacked on the right. */}
+          <div className="flex items-end justify-between gap-2 mt-1">
+            <div className="flex items-end gap-2 flex-shrink-0">
+              <div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
+                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
+                  {booking?.passenger_type || 'Adult'}
+                </span>
+              </div>
+              <div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
+                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
+                  {booking?.status}
+                </span>
+              </div>
+            </div>
+            <div className="text-right min-w-0">
               <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
               <div className="font-mono font-normal text-black text-[8pt] truncate leading-tight mt-px">{booking?.ticket_id}</div>
+              {booking?.valid_until && (
+                <>
+                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none mt-1">Valid Until</div>
+                  <div className="font-normal text-black text-[8pt] leading-tight mt-px">{fmtDate(booking.valid_until)}</div>
+                </>
+              )}
             </div>
-            {booking?.valid_until && (
-              <div className="text-right flex-shrink-0">
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Valid Until</div>
-                <div className="font-normal text-black text-[8pt] leading-tight mt-px">{fmtDate(booking.valid_until)}</div>
-              </div>
-            )}
           </div>
 
           <div className="border-t border-dashed border-black my-1" />
