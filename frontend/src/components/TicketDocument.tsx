@@ -49,63 +49,63 @@ export default function TicketDocument({ booking }) {
       >
 
         {/* ═══════ MAIN PANE ═══════ */}
-        <div className="flex-1 flex flex-col justify-between px-2">
+        <div className="flex-1 flex flex-col justify-between px-3">
 
           {/* ── Route Line ── */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[12pt] font-black text-black tracking-tight truncate">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[15pt] font-black text-black tracking-tight truncate">
                 {booking?.source?.toUpperCase()}
               </span>
-              <svg className="w-5 h-5 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <svg className="w-6 h-6 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className="text-[12pt] font-black text-black tracking-tight truncate">
+              <span className="text-[15pt] font-black text-black tracking-tight truncate">
                 {booking?.destination?.toUpperCase()}
               </span>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-[7pt] text-black font-bold uppercase">
+              <span className="text-[8pt] text-black font-bold uppercase">
                 {booking?.service_type_name}
               </span>
               <span
-                className="text-[6.5pt] font-black uppercase px-1.5 py-0.5 rounded text-white"
+                className="text-[7.5pt] font-black uppercase px-2 py-0.5 rounded text-white"
                 style={{ background: '#000000' }}
               >
                 {bookingTypeLabel}
               </span>
               <span
-                className="text-[6.5pt] font-black uppercase px-1.5 py-0.5 rounded border border-black text-black whitespace-nowrap"
+                className="text-[7.5pt] font-black uppercase px-2 py-0.5 rounded border border-black text-black whitespace-nowrap"
               >
                 {booking?.tier === "first_class" ? "First Class" : "Economy"}
               </span>
             </div>
           </div>
 
-          <div className="border-t border-dashed border-black my-0.5" />
+          <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Details + QR ── */}
-          <div className="flex-1 flex gap-2 min-h-0 items-center">
+          <div className="flex-1 flex gap-3 min-h-0 items-center">
 
             {/* Left: Details 2-column grid */}
-            <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1 content-center">
+            <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-1.5 content-center">
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Passenger</div>
-                <div className="font-normal text-black truncate text-[11pt] leading-tight">{booking?.customer_name}</div>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
+                <div className="font-normal text-black truncate text-[12pt] leading-tight mt-0.5">{booking?.customer_name}</div>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Gender</div>
-                <div className="font-normal text-black text-[10pt] leading-tight">{genderLabel || '\u2014'}</div>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
+                <div className="font-normal text-black text-[11pt] leading-tight mt-0.5">{genderLabel || '\u2014'}</div>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Travel Date</div>
-                <div className="font-normal text-black text-[10pt] leading-tight">{fmtDate(booking?.travel_date)}</div>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Travel Date</div>
+                <div className="font-normal text-black text-[11pt] leading-tight mt-0.5">{fmtDate(booking?.travel_date)}</div>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">
                   {isReturn ? 'Return Date' : 'Vessel'}
                 </div>
-                <div className="font-normal text-black truncate text-[10pt] leading-tight">
+                <div className="font-normal text-black truncate text-[11pt] leading-tight mt-0.5">
                   {isReturn
                     ? fmtDate(booking.return_date)
                     : `${booking?.vessel_name || '\u2014'}${booking?.vessel_capacity ? ` (${booking.vessel_capacity})` : ''}`
@@ -113,52 +113,52 @@ export default function TicketDocument({ booking }) {
                 </div>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Type</div>
-                <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white" style={{ backgroundColor: typeColor() }}>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
+                <span className="inline-block text-[9pt] font-bold uppercase px-2 py-0.5 rounded text-white mt-0.5" style={{ backgroundColor: typeColor() }}>
                   {booking?.passenger_type || 'Adult'}
                 </span>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Status</div>
-                <span className="inline-block text-[8pt] font-bold uppercase px-2 py-0.5 rounded text-white" style={{ backgroundColor: statusColor() }}>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
+                <span className="inline-block text-[9pt] font-bold uppercase px-2 py-0.5 rounded text-white mt-0.5" style={{ backgroundColor: statusColor() }}>
                   {booking?.status}
                 </span>
               </div>
               <div>
-                <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Ticket ID</div>
-                <div className="text-[9pt] font-mono font-normal text-black break-all leading-tight">{booking?.ticket_id}</div>
+                <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
+                <div className="text-[10pt] font-mono font-normal text-black break-all leading-tight mt-0.5">{booking?.ticket_id}</div>
               </div>
               {booking?.valid_until && (
                 <div>
-                  <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Valid Until</div>
-                  <div className="font-normal text-black text-[9.5pt] leading-tight">{fmtDate(booking.valid_until)}</div>
+                  <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Valid Until</div>
+                  <div className="font-normal text-black text-[10.5pt] leading-tight mt-0.5">{fmtDate(booking.valid_until)}</div>
                 </div>
               )}
               {booking?.notes && (
                 <div className="col-span-2">
-                  <div className="text-[7pt] font-bold text-black uppercase tracking-wider">Notes</div>
+                  <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Notes</div>
                   <div className="text-[9pt] font-normal text-black truncate">{booking.notes}</div>
                 </div>
               )}
             </div>
 
-            {/* Right: QR Code */}
-            <div className="flex items-center justify-center shrink-0" style={{ width: '30mm', minWidth: '30mm' }}>
+            {/* Right: QR Code — bigger for the roomier main pane */}
+            <div className="flex items-center justify-center shrink-0" style={{ width: '40mm', minWidth: '40mm' }}>
               <QRCodeSVG
                 value={booking?.qr_code_data || booking?.ticket_id || 'N/A'}
-                size={100}
+                size={140}
                 level="M"
                 includeMargin={true}
-                style={{ width: '100%', height: 'auto', maxWidth: '100px' }}
+                style={{ width: '100%', height: 'auto', maxWidth: '140px' }}
               />
             </div>
           </div>
 
-          <div className="border-t border-dashed border-black my-0.5" />
+          <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Pricing Row ── */}
           <div className="flex items-center justify-between">
-            <div className="text-[7pt] text-black font-normal">
+            <div className="text-[8pt] text-black font-normal">
               <span className="font-bold text-black">ISSUED:</span> {fmtDate(issueDate)}
               {paymentLabel && (
                 <>
@@ -179,68 +179,68 @@ export default function TicketDocument({ booking }) {
                 </>
               )}
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[7pt] text-black font-bold">TOTAL</span>
-              <span className="text-[12pt] font-bold text-black">FJ${money(booking?.total_price)}</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[8pt] text-black font-bold">TOTAL</span>
+              <span className="text-[16pt] font-bold text-black">FJ${money(booking?.total_price)}</span>
             </div>
           </div>
         </div>
 
         {/* ═══════ PERFORATION ═══════ */}
-        <div className="flex-shrink-0 border-l border-dashed border-black" style={{ marginLeft: '4mm' }} />
+        <div className="flex-shrink-0 border-l border-dashed border-black" style={{ marginLeft: '5mm' }} />
 
         {/* ═══════ STUB PANE ═══════ */}
         {/* Compact mirror of the main pane: every key field so the stub is a self-contained receipt after tear */}
-        <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '1.5mm', paddingRight: '1mm' }}>
+        <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '2mm', paddingRight: '1.5mm' }}>
 
           {/* ── Route Line ── Route text is vertically centered in the header
               against the stacked pills on the right. */}
           <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1 min-w-0 flex-1">
-              <span className="text-[8pt] font-black text-black tracking-tight truncate">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <span className="text-[9pt] font-black text-black tracking-tight truncate">
                 {booking?.source?.toUpperCase()}
               </span>
-              <svg className="w-3 h-3 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <svg className="w-3.5 h-3.5 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className="text-[8pt] font-black text-black tracking-tight truncate">
+              <span className="text-[9pt] font-black text-black tracking-tight truncate">
                 {booking?.destination?.toUpperCase()}
               </span>
             </div>
             <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
               <span
-                className="text-[5pt] font-black uppercase px-1 py-0.5 rounded text-white"
+                className="text-[6pt] font-black uppercase px-1 py-0.5 rounded text-white"
                 style={{ background: '#000000' }}
               >
                 {bookingTypeLabel}
               </span>
-              <span className="text-[5pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
+              <span className="text-[6pt] font-black uppercase px-1 py-0.5 rounded border border-black text-black whitespace-nowrap">
                 {booking?.tier === "first_class" ? "First Class" : "Economy"}
               </span>
             </div>
           </div>
 
-          <div className="border-t border-dashed border-black my-0.5" />
+          <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Details + QR ── */}
-          <div className="flex-1 flex gap-1 min-h-0 items-center">
+          <div className="flex-1 flex gap-2 min-h-0 items-center">
 
             {/* Left: compact 2-col details grid */}
-            <div className="flex-1 grid grid-cols-2 gap-x-1 gap-y-0.5 content-center min-w-0">
+            <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1 content-center min-w-0">
               <div className="col-span-2">
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
                 <div className="font-normal text-black truncate text-[8pt] leading-tight">{booking?.customer_name}</div>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
-                <div className="font-normal text-black text-[7.5pt] leading-tight">{genderLabel || '\u2014'}</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
+                <div className="font-normal text-black text-[8pt] leading-tight mt-px">{genderLabel || '\u2014'}</div>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Travel</div>
-                <div className="font-normal text-black text-[7.5pt] leading-tight truncate">{fmtDate(booking?.travel_date)}</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Travel</div>
+                <div className="font-normal text-black text-[8pt] leading-tight mt-px truncate">{fmtDate(booking?.travel_date)}</div>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">
                   {isReturn ? 'Return' : 'Vessel'}
                 </div>
                 <div className="font-normal text-black truncate text-[7.5pt] leading-tight">
@@ -248,31 +248,31 @@ export default function TicketDocument({ booking }) {
                 </div>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Service</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Service</div>
                 <div className="font-normal text-black truncate text-[7.5pt] leading-tight">{booking?.service_type_name || '\u2014'}</div>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
-                <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none" style={{ backgroundColor: typeColor() }}>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
+                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-px" style={{ backgroundColor: typeColor() }}>
                   {booking?.passenger_type || 'Adult'}
                 </span>
               </div>
               <div>
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
-                <span className="inline-block text-[7pt] font-bold uppercase px-1 py-0.5 rounded text-white leading-none" style={{ backgroundColor: statusColor() }}>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
+                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-px" style={{ backgroundColor: statusColor() }}>
                   {booking?.status}
                 </span>
               </div>
             </div>
 
-            {/* Right: QR Code */}
-            <div className="flex items-center justify-center shrink-0" style={{ width: '19mm', minWidth: '19mm' }}>
+            {/* Right: QR Code — bigger for the roomier stub */}
+            <div className="flex items-center justify-center shrink-0" style={{ width: '25mm', minWidth: '25mm' }}>
               <QRCodeSVG
                 value={booking?.qr_code_data || booking?.ticket_id || 'N/A'}
-                size={80}
+                size={110}
                 level="M"
                 includeMargin={true}
-                style={{ width: '100%', height: 'auto', maxWidth: '80px' }}
+                style={{ width: '100%', height: 'auto', maxWidth: '110px' }}
               />
             </div>
           </div>
@@ -280,22 +280,22 @@ export default function TicketDocument({ booking }) {
           {/* ── Ticket ID + Valid Until ── */}
           <div className="flex items-center justify-between gap-1">
             <div className="min-w-0 flex-1">
-              <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
-              <div className="font-mono font-normal text-black text-[7pt] truncate leading-tight">{booking?.ticket_id}</div>
+              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
+              <div className="font-mono font-normal text-black text-[8pt] truncate leading-tight mt-px">{booking?.ticket_id}</div>
             </div>
             {booking?.valid_until && (
               <div className="text-right flex-shrink-0">
-                <div className="text-[6pt] font-bold text-black uppercase tracking-wider leading-none">Valid Until</div>
-                <div className="font-normal text-black text-[7pt] leading-tight">{fmtDate(booking.valid_until)}</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Valid Until</div>
+                <div className="font-normal text-black text-[8pt] leading-tight mt-px">{fmtDate(booking.valid_until)}</div>
               </div>
             )}
           </div>
 
-          <div className="border-t border-dashed border-black my-0.5" />
+          <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Pricing Row ── */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="text-[6.5pt] text-black font-normal leading-tight min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="text-[7pt] text-black font-normal leading-tight min-w-0 flex-1">
               <div className="truncate">
                 <span className="font-bold">ISSUED:</span> {fmtDate(issueDate)}
               </div>
@@ -305,9 +305,9 @@ export default function TicketDocument({ booking }) {
                 </div>
               )}
             </div>
-            <div className="flex items-baseline gap-0.5 flex-shrink-0">
-              <span className="text-[6.5pt] text-black font-bold">TOTAL</span>
-              <span className="text-[10pt] font-bold text-black leading-none">FJ${money(booking?.total_price)}</span>
+            <div className="flex items-baseline gap-1 flex-shrink-0">
+              <span className="text-[7pt] text-black font-bold">TOTAL</span>
+              <span className="text-[12pt] font-bold text-black leading-none">FJ${money(booking?.total_price)}</span>
             </div>
           </div>
         </div>
