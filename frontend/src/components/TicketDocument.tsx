@@ -194,7 +194,7 @@ export default function TicketDocument({ booking }) {
             self-contained receipt after tear. Layout redesigned for the 55mm
             width — details as a single vertical column so nothing truncates
             into the QR. */}
-        <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '2mm', paddingRight: '1.5mm' }}>
+        <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '2mm', paddingRight: '1.5mm', paddingTop: '2mm' }}>
 
           {/* ── Route Line ── Route text is vertically centered in the header
               against the stacked pills on the right. */}
