@@ -226,13 +226,14 @@ export default function TicketDocument({ booking }) {
           <div className="border-t border-dashed border-black my-1" />
 
           {/* ── Details + QR column ──
-              Left: single-column vertical stack of PII details.
+              Left: single-column vertical stack of PII details (vertically
+              centered so it doesn't sit awkwardly at the top).
               Right column stacks: QR at the top, then Ticket ID and Valid
               Until directly beneath it — those get the full 27mm QR width
               so long ticket IDs no longer truncate. */}
-          <div className="flex-1 flex gap-2 min-h-0 items-start">
+          <div className="flex-1 flex gap-2 min-h-0 items-stretch">
 
-            {/* Left: single-column vertical stack, evenly spaced */}
+            {/* Left: single-column vertical stack, vertically centered */}
             <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
               <div>
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
@@ -267,7 +268,7 @@ export default function TicketDocument({ booking }) {
               />
               <div className="w-full text-center">
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
-                <div className="font-mono font-normal text-black text-[7.5pt] leading-tight mt-px break-all">{booking?.ticket_id}</div>
+                <div className="font-mono font-normal text-black text-[7pt] leading-tight mt-px whitespace-nowrap tracking-tight">{booking?.ticket_id}</div>
               </div>
               {booking?.valid_until && (
                 <div className="w-full text-center">
@@ -278,17 +279,19 @@ export default function TicketDocument({ booking }) {
             </div>
           </div>
 
-          {/* ── Type + Status pills — full stub width so pills breathe ── */}
-          <div className="flex items-end gap-3 mt-1">
-            <div>
-              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
-              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
+          {/* ── Type + Status pills — stacked vertically so the longer
+              Status label doesn't force truncation. Status is placed
+              beneath Type. ── */}
+          <div className="flex flex-col items-start gap-1 mt-1">
+            <div className="flex items-center gap-1.5">
+              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none w-[12mm]">Type</div>
+              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none" style={{ backgroundColor: typeColor() }}>
                 {booking?.passenger_type || 'Adult'}
               </span>
             </div>
-            <div>
-              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
-              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
+            <div className="flex items-center gap-1.5">
+              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none w-[12mm]">Status</div>
+              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none" style={{ backgroundColor: statusColor() }}>
                 {booking?.status}
               </span>
             </div>
