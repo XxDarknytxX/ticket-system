@@ -95,7 +95,7 @@ export default function TicketDocument({ booking }) {
               </div>
               <div>
                 <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
-                <div className="font-normal text-black text-[11pt] leading-tight mt-0.5">{genderLabel || '\u2014'}</div>
+                <div className="font-normal text-black text-[11pt] leading-tight mt-0.5">{genderLabel || '—'}</div>
               </div>
               <div>
                 <div className="text-[8pt] font-bold text-black uppercase tracking-wider leading-none">Travel Date</div>
@@ -108,7 +108,7 @@ export default function TicketDocument({ booking }) {
                 <div className="font-normal text-black truncate text-[11pt] leading-tight mt-0.5">
                   {isReturn
                     ? fmtDate(booking.return_date)
-                    : `${booking?.vessel_name || '\u2014'}${booking?.vessel_capacity ? ` (${booking.vessel_capacity})` : ''}`
+                    : `${booking?.vessel_name || '—'}${booking?.vessel_capacity ? ` (${booking.vessel_capacity})` : ''}`
                   }
                 </div>
               </div>
@@ -142,14 +142,14 @@ export default function TicketDocument({ booking }) {
               )}
             </div>
 
-            {/* Right: QR Code — bigger for the roomier main pane */}
-            <div className="flex items-center justify-center shrink-0" style={{ width: '40mm', minWidth: '40mm' }}>
+            {/* Right: QR Code — bigger for reliable scanning on the roomier main pane */}
+            <div className="flex items-center justify-center shrink-0" style={{ width: '45mm', minWidth: '45mm' }}>
               <QRCodeSVG
                 value={booking?.qr_code_data || booking?.ticket_id || 'N/A'}
-                size={140}
+                size={170}
                 level="M"
                 includeMargin={true}
-                style={{ width: '100%', height: 'auto', maxWidth: '140px' }}
+                style={{ width: '100%', height: 'auto', maxWidth: '170px' }}
               />
             </div>
           </div>
@@ -190,7 +190,10 @@ export default function TicketDocument({ booking }) {
         <div className="flex-shrink-0 border-l border-dashed border-black" style={{ marginLeft: '5mm' }} />
 
         {/* ═══════ STUB PANE ═══════ */}
-        {/* Compact mirror of the main pane: every key field so the stub is a self-contained receipt after tear */}
+        {/* Compact mirror of the main pane: every key field so the stub is a
+            self-contained receipt after tear. Layout redesigned for the 55mm
+            width — details as a single vertical column so nothing truncates
+            into the QR. */}
         <div className="flex-shrink-0 flex flex-col justify-between" style={{ width: '55mm', paddingLeft: '2mm', paddingRight: '1.5mm' }}>
 
           {/* ── Route Line ── Route text is vertically centered in the header
@@ -222,57 +225,58 @@ export default function TicketDocument({ booking }) {
 
           <div className="border-t border-dashed border-black my-1" />
 
-          {/* ── Details + QR ── */}
-          <div className="flex-1 flex gap-2 min-h-0 items-center">
+          {/* ── Details + QR ──
+              Single vertical column of details on the left prevents value
+              truncation. QR on the right, larger for reliable scanning. */}
+          <div className="flex-1 flex gap-2 min-h-0 items-stretch">
 
-            {/* Left: compact 2-col details grid */}
-            <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1 content-center min-w-0">
-              <div className="col-span-2">
+            {/* Left: single-column vertical stack, evenly spaced */}
+            <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
+              <div>
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Passenger</div>
-                <div className="font-normal text-black truncate text-[8pt] leading-tight">{booking?.customer_name}</div>
+                <div className="font-normal text-black truncate text-[9pt] leading-tight mt-0.5">{booking?.customer_name}</div>
               </div>
               <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Gender</div>
-                <div className="font-normal text-black text-[8pt] leading-tight mt-px">{genderLabel || '\u2014'}</div>
-              </div>
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Travel</div>
-                <div className="font-normal text-black text-[8pt] leading-tight mt-px truncate">{fmtDate(booking?.travel_date)}</div>
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Travel Date</div>
+                <div className="font-normal text-black text-[8pt] leading-tight mt-0.5">{fmtDate(booking?.travel_date)}</div>
               </div>
               <div>
                 <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">
-                  {isReturn ? 'Return' : 'Vessel'}
+                  {isReturn ? 'Return Date' : 'Vessel'}
                 </div>
-                <div className="font-normal text-black truncate text-[7.5pt] leading-tight">
-                  {isReturn ? fmtDate(booking.return_date) : (booking?.vessel_name || '\u2014')}
+                <div className="font-normal text-black truncate text-[8pt] leading-tight mt-0.5">
+                  {isReturn ? fmtDate(booking.return_date) : (booking?.vessel_name || '—')}
                 </div>
               </div>
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Service</div>
-                <div className="font-normal text-black truncate text-[7.5pt] leading-tight">{booking?.service_type_name || '\u2014'}</div>
+              <div className="flex items-end gap-3">
+                <div>
+                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
+                  <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
+                    {booking?.passenger_type || 'Adult'}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
+                  <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
+                    {booking?.status}
+                  </span>
+                </div>
               </div>
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
-                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-px" style={{ backgroundColor: typeColor() }}>
-                  {booking?.passenger_type || 'Adult'}
-                </span>
-              </div>
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
-                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-px" style={{ backgroundColor: statusColor() }}>
-                  {booking?.status}
-                </span>
-              </div>
+              {genderLabel && (
+                <div className="text-[7pt] text-black leading-tight">
+                  <span className="font-bold uppercase tracking-wider text-[6.5pt]">Gender:</span> {genderLabel}
+                </div>
+              )}
             </div>
 
-            {/* Right: QR Code — bigger for the roomier stub */}
-            <div className="flex items-center justify-center shrink-0" style={{ width: '25mm', minWidth: '25mm' }}>
+            {/* Right: QR Code — bigger for reliable scanning */}
+            <div className="flex items-center justify-center shrink-0" style={{ width: '27mm', minWidth: '27mm' }}>
               <QRCodeSVG
                 value={booking?.qr_code_data || booking?.ticket_id || 'N/A'}
-                size={110}
+                size={120}
                 level="M"
                 includeMargin={true}
-                style={{ width: '100%', height: 'auto', maxWidth: '110px' }}
+                style={{ width: '100%', height: 'auto', maxWidth: '120px' }}
               />
             </div>
           </div>
