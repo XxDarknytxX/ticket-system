@@ -225,10 +225,12 @@ export default function TicketDocument({ booking }) {
 
           <div className="border-t border-dashed border-black my-1" />
 
-          {/* ── Details + QR ──
+          {/* ── Details + QR column ──
               Left: single-column vertical stack of PII details.
-              Right: QR, taller and centered. */}
-          <div className="flex gap-2 min-h-0 items-stretch">
+              Right column stacks: QR at the top, then Ticket ID and Valid
+              Until directly beneath it — those get the full 27mm QR width
+              so long ticket IDs no longer truncate. */}
+          <div className="flex-1 flex gap-2 min-h-0 items-start">
 
             {/* Left: single-column vertical stack, evenly spaced */}
             <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
@@ -254,8 +256,8 @@ export default function TicketDocument({ booking }) {
               </div>
             </div>
 
-            {/* Right: QR Code — bigger for reliable scanning */}
-            <div className="flex items-center justify-center shrink-0" style={{ width: '27mm', minWidth: '27mm' }}>
+            {/* Right: QR at top, Ticket ID + Valid Until directly below */}
+            <div className="flex-shrink-0 flex flex-col items-center gap-1" style={{ width: '27mm', minWidth: '27mm' }}>
               <QRCodeSVG
                 value={booking?.qr_code_data || booking?.ticket_id || 'N/A'}
                 size={120}
@@ -263,37 +265,32 @@ export default function TicketDocument({ booking }) {
                 includeMargin={true}
                 style={{ width: '100%', height: 'auto', maxWidth: '120px' }}
               />
+              <div className="w-full text-center">
+                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
+                <div className="font-mono font-normal text-black text-[7.5pt] leading-tight mt-px break-all">{booking?.ticket_id}</div>
+              </div>
+              {booking?.valid_until && (
+                <div className="w-full text-center">
+                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Valid Until</div>
+                  <div className="font-normal text-black text-[7.5pt] leading-tight mt-px">{fmtDate(booking.valid_until)}</div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ── Type + Status + Ticket ID + Valid Until ──
-              These sit BELOW the QR row so they get the full stub width and
-              never get truncated. Type/Status pills on the left, Ticket ID
-              & Valid Until stacked on the right. */}
-          <div className="flex items-end justify-between gap-2 mt-1">
-            <div className="flex items-end gap-2 flex-shrink-0">
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
-                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
-                  {booking?.passenger_type || 'Adult'}
-                </span>
-              </div>
-              <div>
-                <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
-                <span className="inline-block text-[7.5pt] font-bold uppercase px-1.5 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
-                  {booking?.status}
-                </span>
-              </div>
+          {/* ── Type + Status pills — full stub width so pills breathe ── */}
+          <div className="flex items-end gap-3 mt-1">
+            <div>
+              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Type</div>
+              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: typeColor() }}>
+                {booking?.passenger_type || 'Adult'}
+              </span>
             </div>
-            <div className="text-right min-w-0">
-              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Ticket ID</div>
-              <div className="font-mono font-normal text-black text-[8pt] truncate leading-tight mt-px">{booking?.ticket_id}</div>
-              {booking?.valid_until && (
-                <>
-                  <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none mt-1">Valid Until</div>
-                  <div className="font-normal text-black text-[8pt] leading-tight mt-px">{fmtDate(booking.valid_until)}</div>
-                </>
-              )}
+            <div>
+              <div className="text-[6.5pt] font-bold text-black uppercase tracking-wider leading-none">Status</div>
+              <span className="inline-block text-[7.5pt] font-bold uppercase px-2 py-0.5 rounded text-white leading-none mt-0.5" style={{ backgroundColor: statusColor() }}>
+                {booking?.status}
+              </span>
             </div>
           </div>
 
