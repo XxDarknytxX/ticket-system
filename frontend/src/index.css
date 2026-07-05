@@ -175,11 +175,11 @@
 
 /* ═══════════════════════ PRINT ═══════════════════════ */
 @media print {
-  @page { size: 187mm 82mm; margin: 0; }
+  @page { size: 200mm 92mm; margin: 0; }
   body > *:not([data-print-root]) { display: none !important; }
   * { box-sizing: border-box; }
   html, body {
-    width: 187mm !important; height: 82mm !important;
+    width: 200mm !important; height: 92mm !important;
     margin: 0 !important; padding: 0 !important;
     overflow: hidden !important; background: #fff !important;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
@@ -187,11 +187,11 @@
   .no-print { display: none !important; }
   [data-print-root] {
     display: block !important; position: static !important;
-    left: auto !important; visibility: visible !important; width: 187mm !important;
+    left: auto !important; visibility: visible !important; width: 200mm !important;
   }
   .ticket-page {
     position: relative !important; top: auto !important; left: auto !important;
-    width: 187mm !important; height: 82mm !important;
+    width: 200mm !important; height: 92mm !important;
     padding: 0 !important; margin: 0 !important;
     background: #fff !important; border: 0 !important;
     border-radius: 0 !important; box-shadow: none !important;

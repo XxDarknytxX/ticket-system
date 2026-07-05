@@ -79,7 +79,7 @@ export default function AgentBooking() {
   const handlePrintSingle = useReactToPrint({
     contentRef: singleTicketRef,
     documentTitle: () => `Ticket_${singleTicketToPrint?.ticket_id || "single"}`,
-    pageStyle: `@page { size: 187mm 82mm; margin: 0; }`,
+    pageStyle: `@page { size: 200mm 92mm; margin: 0; }`,
   });
 
   const printSingleTicket = (ticket) => {
@@ -92,7 +92,7 @@ export default function AgentBooking() {
     contentRef: allTicketsRef,
     documentTitle: `Tickets_${travelDate || "booking"}`,
     pageStyle: `
-      @page { size: 187mm 82mm; margin: 0; }
+      @page { size: 200mm 92mm; margin: 0; }
       html, body {
         margin: 0 !important; padding: 0 !important;
         background: #fff !important;
@@ -101,8 +101,8 @@ export default function AgentBooking() {
       }
       .ticket-container {
         display: block;
-        width: 187mm;
-        height: 82mm;
+        width: 200mm;
+        height: 92mm;
         overflow: hidden;
         page-break-after: always;
         break-after: page;
@@ -114,8 +114,8 @@ export default function AgentBooking() {
         break-after: auto;
       }
       .ticket-page {
-        width: 187mm !important;
-        height: 82mm !important;
+        width: 200mm !important;
+        height: 92mm !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
@@ -3147,7 +3147,7 @@ export default function AgentBooking() {
           position: "absolute",
           left: "-10000px",
           visibility: "hidden",
-          width: "187mm",
+          width: "200mm",
         }}
       >
         {bookedTickets.map((ticket) => (
@@ -3155,8 +3155,8 @@ export default function AgentBooking() {
             key={ticket.id}
             className="ticket-container"
             style={{
-              width: '187mm',
-              height: '82mm',
+              width: '200mm',
+              height: '92mm',
               overflow: 'hidden',
               pageBreakAfter: 'always',
             }}
@@ -3175,7 +3175,7 @@ export default function AgentBooking() {
             position: "absolute",
             left: "-10000px",
             visibility: "hidden",
-            width: "187mm",
+            width: "200mm",
           }}
         >
           <div className="ticket-container">

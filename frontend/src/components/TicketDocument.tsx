@@ -2,11 +2,11 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 /*
-  Physical ticket stock: 187mm x 82mm
+  Physical ticket stock: 200mm x 92mm
   Pre-printed header: 12mm from top  (logo, company name - already on paper)
-  Pre-printed footer: 5mm from bottom (terms, website - already on paper)
-  Printable content zone: 82mm - 12mm - 5mm = 65mm tall
-  Main pane: 128mm wide | Perforation | Stub: 55mm wide
+  Pre-printed footer: 7.5mm from bottom (terms, website - already on paper)
+  Printable content zone: 92mm - 12mm - 7.5mm = 72.5mm tall
+  Main pane: 145mm wide | Perforation | Stub: 55mm wide (unchanged)
 */
 
 export default function TicketDocument({ booking }) {
@@ -30,18 +30,18 @@ export default function TicketDocument({ booking }) {
     <div
       className={[
         'ticket-page mx-auto bg-white overflow-hidden my-3',
-        'w-[680px] h-[310px]',
-        'print:w-[187mm] print:h-[82mm] print:p-0',
+        'w-[728px] h-[348px]',
+        'print:w-[200mm] print:h-[92mm] print:p-0',
         'print:rounded-none print:shadow-none print:border-none',
         'print-avoid-break',
       ].join(' ')}
       style={{ fontFamily: "'Inter', Arial, Helvetica, sans-serif" }}
     >
       {/*
-        Outer wrapper: full 82mm ticket height.
+        Outer wrapper: full 92mm ticket height.
         Top padding = 12mm (pre-printed header zone)
-        Bottom padding = 5mm (pre-printed footer zone)
-        Content fills the 65mm between.
+        Bottom padding = 7.5mm (pre-printed footer zone)
+        Content fills the 72.5mm between.
       */}
       <div
         className="flex h-full"
