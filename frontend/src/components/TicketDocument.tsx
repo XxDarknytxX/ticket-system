@@ -26,6 +26,25 @@ export default function TicketDocument({ booking }) {
   const paymentLabel = (booking?.payment_method_name || booking?.payment_method || '').toString().toUpperCase();
   const issueDate = booking?.booking_date || booking?.created_at;
 
+  // Route name length → font-size tiers so long names scale down instead of
+  // truncating. If they're extremely long we also allow wrap onto 2 lines.
+  const srcName = (booking?.source || '').toUpperCase();
+  const dstName = (booking?.destination || '').toUpperCase();
+  const nameLen = Math.max(srcName.length, dstName.length);
+  const mainRouteSize =
+    nameLen <= 7  ? 'text-[15pt]' :
+    nameLen <= 9  ? 'text-[13pt]' :
+    nameLen <= 11 ? 'text-[11pt]' :
+    nameLen <= 14 ? 'text-[9pt]'  :
+                    'text-[8pt]';
+  const stubRouteSize =
+    nameLen <= 5  ? 'text-[9pt]' :
+    nameLen <= 7  ? 'text-[8pt]' :
+    nameLen <= 10 ? 'text-[7pt]' :
+                    'text-[6pt]';
+  const routeAllowWrap = nameLen > 13; // wrap onto 2 lines only for extreme cases
+  const wrapClass = routeAllowWrap ? 'whitespace-normal break-words leading-tight' : 'truncate';
+
   return (
     <div
       className={[
@@ -54,14 +73,14 @@ export default function TicketDocument({ booking }) {
           {/* ── Route Line ── */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[15pt] font-black text-black tracking-tight truncate">
-                {booking?.source?.toUpperCase()}
+              <span className={`${mainRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+                {srcName}
               </span>
               <svg className="w-6 h-6 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className="text-[15pt] font-black text-black tracking-tight truncate">
-                {booking?.destination?.toUpperCase()}
+              <span className={`${mainRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+                {dstName}
               </span>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -200,14 +219,14 @@ export default function TicketDocument({ booking }) {
               against the stacked pills on the right. */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="text-[9pt] font-black text-black tracking-tight truncate">
-                {booking?.source?.toUpperCase()}
+              <span className={`${stubRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+                {srcName}
               </span>
               <svg className="w-3.5 h-3.5 text-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              <span className="text-[9pt] font-black text-black tracking-tight truncate">
-                {booking?.destination?.toUpperCase()}
+              <span className={`${stubRouteSize} font-black text-black tracking-tight ${wrapClass}`}>
+                {dstName}
               </span>
             </div>
             <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
